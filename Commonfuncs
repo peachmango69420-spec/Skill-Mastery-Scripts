@@ -1,0 +1,150 @@
+local designinfo = require(script.Parent.DesignInfo)
+local rep = game.ReplicatedStorage
+local uis = rep:WaitForChild("UiStuff")
+local imglabeltemplate = uis:WaitForChild("ImageButtonTemplate")
+local gameinfo = require(rep.GameStatsInfo)
+local npcbuyvals = gameinfo.market.npcbuyvals
+local profiles = require(rep.DataStoreModule)
+local mathmodule = require(rep.Mathematics)
+local functions = {}
+function functions.tooltip(UiElement, info, player: Player)
+	if not player and game:GetService("RunService"):IsClient() then player = game.Players.LocalPlayer end
+	local tooltip: Frame = player:WaitForChild("PlayerGui"):WaitForChild("SupportGui").ToolTipFrame
+	UiElement.MouseEnter:Connect(function()
+		for name,val in pairs(info) do
+			if name ~= "Label" and type(val) == "string" or type(val) == "number" then
+			local label: TextLabel = tooltip:FindFirstChild(name.."Label")
+			local pretext = (name == "Price" and "") or (name == "Chance" and name) or name..": "
+			label.Text = pretext .. val
+			label.Visible = true end
+		end
+		tooltip:FindFirstChild("NameLabel").Text = info["Name"]
+		tooltip.Visible = true
+		task.delay(0.1, function() tooltip.Visible = true end)
+	end)
+	UiElement.MouseLeave:Connect(function()
+		tooltip.Visible = false
+		for _, child in tooltip:GetChildren() do
+			if child:IsA("TextLabel") then
+			child.Visible = false end
+		end
+	end)
+end
+function functions.tweensize(button)
+	local tweens = game.TweenService
+	local scaler = Instance.new("UIScale", button)
+	local growteen = tweens:Create(scaler, TweenInfo.new(0.12, Enum.EasingStyle.Elastic),{Scale = 1.1})
+	local shrinktween = tweens:Create(scaler, TweenInfo.new(0.12, Enum.EasingStyle.Elastic),{Scale = 1})
+	local tick = game.SoundService.Tick
+	button.MouseEnter:Connect(function()growteen:Play() tick:Play() end)
+	button.MouseLeave:Connect(function()shrinktween:Play()end)
+end
+function functions.GetTweens(frame)
+	local ogsize = frame.Size
+	local ti,ts = TweenInfo.new(0.7),game.TweenService
+	return {ts:Create(frame,ti,{Size = ogsize}),ts:Create(frame,ti,{BackgroundTransparency = 0}),ts:Create(frame,ti,{Size = UDim2.fromScale(0,0)}),ts:Create(frame,ti,{BackgroundTransparency = 1})}
+end
+function functions.NumberCommas(number)
+	local number, fraction = math.modf(number)
+	if fraction == 0 then fraction = "" end fraction = string.sub(fraction, 0, 4)
+	number = tostring(number) 
+	local digits = string.len(number) local multitude1k = (digits - 1) // 3 local remainder = digits % 3
+	if remainder == 0 then remainder = 3 end
+	for i = 1, multitude1k do
+		local placement = remainder + (i - 1) * 4
+		local start, finish = string.sub(number, 0, placement), string.sub(number, placement + 1)
+		number = start .. "," .. finish
+	end
+	return number .. fraction
+end
+function functions.createimagelabel(parent, itemname, val, bonusperks, player)
+	local tempclone = imglabeltemplate:Clone()
+	tempclone:SetAttribute("Name", itemname)
+	local image = tempclone.Image
+	local imageID = designinfo.iconids[itemname] or 12905962634
+	image.Image = "rbxassetid://"..tostring(imageID)
+	functions.tweensize(tempclone)
+    tempclone.Parent = parent
+	if val then tempclone.Amount.Text = val end
+	if bonusperks then local scale = bonusperks["Scale"]
+		if bonusperks["Square"] then Instance.new("UIAspectRatioConstraint").Parent = tempclone end
+		if scale then tempclone.Size = UDim2.fromScale(tempclone.Size.X.Scale * scale, tempclone.Size.Y.Scale * scale) end
+		bonusperks["Square"] = nil
+		bonusperks["Scale"] = nil
+		image.Interactable = not bonusperks["Label"]
+		functions.tooltip(tempclone, bonusperks,player) end
+	return tempclone
+end
+function functions.timer(label:TextLabel, addtext:string, timeuntil:number)
+	task.spawn(function()
+		while task.wait(1) do
+			local formatted = timeuntil - os.time()
+			label.Text = addtext..mathmodule.timeconcatenation(formatted)
+		end
+	end)
+	return
+end
+function functions.errorButton(button,msg:string,customsound:Sound,customcolor:Color3,customtime:number)
+	local errorsound = customsound or game.SoundService.Error2
+	button.Interactable = false local oldtext,oldcolor = button.Text,button.BackgroundColor3
+	button.BackgroundColor3 = customcolor or Color3.new(0.666667, 0, 0)
+	button.Text = msg
+	errorsound:Play()
+	task.wait(customtime or 0.75)
+	button.Interactable = true
+	button.BackgroundColor3 = oldcolor
+	button.Text = oldtext
+	return
+end
+function functions.withRetries(retrycount:number,...)
+	local delay = 0.5
+	for attempt = 1, retrycount do
+		local ok, resultOrErr = pcall(...)
+		if ok then
+			return true, resultOrErr
+		end
+		task.wait(delay + math.random() * 0.2)
+		delay = math.min(delay * 2, 4)
+	end
+	return false, "failed after retries"
+end
+local clientprofiles = {}
+function functions.ClientProfile(player)
+	local existingStoredprofile = clientprofiles[player.UserId]
+	if not existingStoredprofile then task.wait(math.random()) if clientprofiles[player.UserId] then return existingStoredprofile end
+		local res, profile = functions.withRetries(3, function() return rep.Update.RequestProfile:InvokeServer() end)
+		clientprofiles[player.UserId] = profile
+	end
+	return clientprofiles[player.UserId]
+end
+function functions.AddClientInfo(player, newinfo)
+	clientprofiles[player.UserId] = newinfo
+end
+local safeitems = {
+	"UIAspectRatioConstraint",
+	"UIGridLayout",
+	"UIListLayout",
+	"UIStroke",
+	"UIGradient",
+	"UICorner",
+	"LocalScript",
+}
+function functions.SafeClear(frame:Frame, excludeditem)
+	for _, child in frame:GetChildren() do
+		if not table.find(safeitems, child.ClassName) and (child.Name ~= excludeditem) then child:Destroy() end
+	end
+end
+function functions.GetMods ()
+	local modules = {Funcs = functions, Design = designinfo, Math = mathmodule,
+		Profiles = profiles, Info = gameinfo}
+	return modules
+end
+function functions.SafeGet (plr)
+	local id = (plr or game.Players.LocalPlayer).UserId
+	local profile = clientprofiles[id]
+	if not profile then
+		repeat task.wait(1) profile = clientprofiles[id] until profile
+	end
+	return profile
+end
+return functions
