@@ -1,0 +1,16 @@
+local rep = game.ReplicatedStorage
+local m = require(rep.Modules.Commonfuncs):GetMods()
+local profiler = m.Profiles
+rep.AddCustomSong.OnServerInvoke = function(player:Player, songID)
+	local profile = profiler.getprofile(player.UserId)
+	local playlist = profile["Playlist"]
+	if not playlist then return false, "No playlist!" end
+	for _, songingorm in ipairs(playlist) do
+		if songingorm.id == tostring(songID) then return false, "You already have this!" end
+	end
+	local res, assetinfo = pcall(function() return game:GetService("MarketplaceService"):GetProductInfoAsync(songID) end)
+	if not assetinfo or (assetinfo and not assetinfo.Name) or not res then return false, "Could not find asset with given ID" end
+	if assetinfo.AssetTypeId ~= 3 then return false, "The asset is not an Audio!" end
+	table.insert(profile["Playlist"], {id = songID, songname = assetinfo.Name})
+	return true, assetinfo.Name 
+end
