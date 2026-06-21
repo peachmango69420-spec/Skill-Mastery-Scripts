@@ -1,0 +1,32 @@
+local rep = game:GetService("ReplicatedStorage")
+local info = require(rep.GameStatsInfo)
+local profiles = require(rep.DataStoreModule)
+local updateminelabel = game.ReplicatedStorage.Craft.UpdateMiningReminder
+rep.Craft.RequestUpgrade.OnServerEvent:Connect(function(player)
+	local profile = profiles.getprofile(player.UserId)
+	local currentpick = profile["pick"] or 0
+	local cpickinfo = info.mining.pickinfo["pick"..tostring(currentpick + 1)]
+	local canbuy = true
+	for key, cost in pairs(cpickinfo.cost) do
+		local stat = profile[key]
+		if stat and stat < cost then canbuy = false print(player.Name.." Needs more "..key..", He only has "..stat.."!")
+		elseif not stat and (profile[key] or 0) < cost then canbuy = false print("Player needs "..cost..key)
+		end
+	end
+	for ltype, requirement in cpickinfo.requirelevel do
+		local level = profile[ltype.."_Level"]
+		if level and level < requirement then canbuy = false 
+			print("Not enough "..ltype.." Levels, you have "..level..", You need "..requirement)end
+	end
+	if canbuy then 
+		for key, cost in cpickinfo.cost do
+			profiles.removeitem(player, key, cost)
+		end
+		profiles.giveXP(player, "Crafting", cpickinfo.xpbonus or 0)
+		profile["pick"] += 1
+		profiles.awardAchievement(player, {Skill = "Crafting", Diff = "easy", Index = 1})
+		task.wait(0.2)
+		print("Player has purchased pickaxe #"..tostring(profile["pick"]).."!")
+		updateminelabel:FireClient(player, currentpick)
+	end
+end) 
