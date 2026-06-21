@@ -1,0 +1,8 @@
+local rep = game.ReplicatedStorage
+local NotifyOptInRemote = rep.Update:WaitForChild("NotifyOptIn")
+local profiles = require(rep.DataStoreModule)
+
+game:GetService("ExperienceNotificationService").OptInPromptClosed:Connect(function(player: Player)
+	local profile = profiles(player.UserId)
+	profiles.updateprofile(player.UserId, "IsPromptedIn", true)
+end)
