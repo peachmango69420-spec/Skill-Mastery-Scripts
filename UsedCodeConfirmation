@@ -1,0 +1,28 @@
+local rep = game.ReplicatedStorage
+local profiles = require(rep.DataStoreModule)
+local codes = {
+	["FIRSTCODE123"] = {rewardtype = "Donor Coins", rewardquantity = 1, expiresat = 1759280400 },
+	["SPECIALCODEV1"] = {rewardtype = "Donor Coins", rewardquantity = 10, expiresat = 1759924800 },
+	["Loading_screen123"] = {rewardtype = "Coins", rewardquantity = 150, expiresat =  2000000000 },
+}
+rep.Update.UseCode.OnServerInvoke = function(player, code)
+	local profile = profiles.getprofile(player.UserId)
+	local ifcode = codes[code]
+	if ifcode and ifcode["expiresat"] < os.time() then return false, "Code expired!"
+	elseif ifcode and profile["Usedcodes"][code] then return false, "You already redeemed this code!"
+	elseif ifcode then 
+		local reward = ifcode["rewardtype"]
+		local rewardquantity = ifcode["rewardquantity"]
+		profiles.additem(player, reward, rewardquantity)
+		profiles.updateprofile(player.UserId, "Usedcodes", true, code)
+		return true, "+"..rewardquantity.." "..reward
+	elseif not ifcode then return false, "Invalid code" end
+	return false, "Error"
+end
+game.MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(plr,pass,wp)
+	if pass ~= 1507939942 or not wp then return end
+	local profile = require(game.ReplicatedStorage.DataStoreModule)
+	profile.additem(plr, "Coins", 1000)
+	profile.additem(plr, "Stone", 500)
+	profile.additem(plr, "Donor Coins", 10)
+end)
