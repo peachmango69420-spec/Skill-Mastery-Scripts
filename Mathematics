@@ -1,0 +1,70 @@
+-- This script can deal with common equations that can be used by many scripts yet take a lot of coding space. Mainly displaying time.
+local levelupsfx = game.SoundService.Win
+local module = {
+	timeconcatenation = function(time) -- This is mainly used for writing timestamps like 1:32:05, 
+		-- but I feel like there's already a function that can do that and I'm overcomplicating it..
+		if time < 3600 then
+		local timeminutes = math.floor(time/60)
+		local timeleftseconds = time - (timeminutes * 60)
+		local text = tostring(timeminutes)..":"..(10 > timeleftseconds and "0"..timeleftseconds or timeleftseconds)
+		return text 
+		elseif time > 3600 and time < 86400 then
+		local timehours = math.floor(time/3600)
+		local timeleftminutes = math.floor((time - (timehours * 3600))/ 60)
+		local timeleftseconds = time - ((timehours * 3600) + (timeleftminutes * 60))
+		local text = tostring(timehours)..":"..(10 > timeleftminutes and "0"..timeleftminutes or timeleftminutes)..":"..(10 > timeleftseconds and "0"..timeleftseconds or timeleftseconds)
+		return text
+		elseif time > 86400 then
+		local timedays = math.floor(time/86400)
+		local timelefthours = math.floor((time - (timedays * 86400)) / 3600)
+		local timeleftminutes = math.floor((time - ((timedays * 86400) + (timelefthours * 3600)))/ 60)
+		local timeleftseconds = time - ((timedays * 86400) + (timelefthours * 3600) + (timeleftminutes * 60))
+		local text = tostring(timedays)..":"..(10 > timelefthours and "0"..timelefthours or timelefthours)..":"..(10 > timeleftminutes and "0"..timeleftminutes or timeleftminutes)..":"..(10 > timeleftseconds and "0"..timeleftseconds or timeleftseconds)
+		return text
+		else
+		local text = time
+		return text
+		end
+	end,
+	xpmultcalc = function(player, othermults) -- Calculates the multiplier for when the player gains XP based on gamepasses, donor coin buffs etc.
+		local stats = player:FindFirstChild("stats")
+		local donorcoineffects = { 
+			stats:FindFirstChild("1.1x XP"),
+			stats:FindFirstChild("1.2x XP"),
+			stats:FindFirstChild("1.5x XP"),
+			stats:FindFirstChild("2x XP Perm"),
+		}
+		local xpmulti = 1
+		if donorcoineffects[1].Value > 0 then xpmulti *= 1.1 end
+		if donorcoineffects[2].Value > 0 then xpmulti *= 1.2 end
+		if donorcoineffects[3].Value > 0 then xpmulti *= 1.5 end
+		if donorcoineffects[4].Value == true then xpmulti *= 2 end
+		if othermults then xpmulti *= othermults end
+		return xpmulti
+	end,
+	xpforlevels = {},
+}
+for i = 1, 200 do -- Does the calculations, fills them in the xpforlevels table
+	local xptable = module.xpforlevels
+	xptable[i] = math.floor(i^(3 + i/200))
+end
+function module.levelcalc(player, stat, xp)
+		local xptable = module.xpforlevels
+		local levelvalue = player.SkillXP:FindFirstChild(stat.."_Level")
+		local xpvalue = player.SkillXP:FindFirstChild(stat.."_XP")
+		xp = xp or xpvalue.Value
+		if xp == 0 then return {1, 2, 0} end
+		local level = 1
+		for i = 1, 100 do
+			if (xptable[i] or 0) <= xp then level += 1
+			else level -= 1 break
+			end
+		end
+		local currentlevel = xptable[level] or 0
+		local nextlevel = (xptable[level+1] or 0) - currentlevel
+		local currentlevelxp = xp - currentlevel
+		if level > levelvalue.Value then levelupsfx:Play()
+			levelvalue.Value = level end
+		return {level, nextlevel, currentlevelxp}
+end
+return module
