@@ -1,0 +1,17 @@
+local rep = game.ReplicatedStorage
+local profiles = require(rep.DataStoreModule)
+local info = require(rep.GameStatsInfo)
+rep.Market.NpcSellReq.OnServerInvoke = function(player, item, amount:number) 
+	local stat = player.leaderstats:FindFirstChild(item) or player.stats:FindFirstChild(item)
+	local coins = player.leaderstats.Coins
+	local profile = profiles.getprofile(player.UserId)
+	if math.floor(amount) ~= amount then return false, "You can't sell a fraction of an item!", Color3.fromRGB(255, 100, 11) end
+	if profile and profile[item] and profile[item] >= amount then
+		local reward = amount * info.market.npcvals[item]
+		profiles.removeitem(player, item, amount)
+		profiles.additem(player, "Coins", reward)
+		return true, "Sold! Coins: "..reward, Color3.fromRGB(255, 255, 0)
+	elseif profile and profile[item] and profile[item] <= amount then
+		return false, "You don't have enough!", Color3.fromRGB(255, 100, 11) end
+	return false, "Error", Color3.fromRGB(255, 76, 5)
+end
