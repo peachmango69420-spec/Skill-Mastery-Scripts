@@ -1,0 +1,422 @@
+local gameinfo = { -- Store info regarding many thing in the game, especially tools, that usually make use of nested tables
+	tools = {
+		toolitems = {
+			"Sprinkler",
+			"Shinifier",
+			"Mushroom Seed",
+			"Carrot Seed",
+			"Health Potion",
+			"Super Health Potion",
+			"Farming Potion",
+		},
+	},
+	smeltingingo = {
+	  ["Copper Bar"] = {smeltime = 5, cost = "Copper", costamount = 1, index = 0,smeltxp = 2, furneed = 0},
+		["Iron Bar"] = {smeltime = 10, cost = "Iron", costamount = 1, index = 1,smeltxp = 5, furneed = 0},
+		["Silver Bar"] = {smeltime = 60, cost = "Silver", costamount = 1, index = 2,smeltxp = 25, furneed = 1},
+		["Gold Bar"] = {smeltime = 600, cost = "Gold", costamount = 1, index = 3, smeltxp = 200, furneed = 2},
+	},
+	upgradeorders = {
+		["Sword"] = {
+			[0] = {name = "Basic Sword", bonusinfo = {["Max Damage"] = "1", Speed = "1", Accuracy = "50%"}
+			},
+			[1] = {name = "Iron Dagger", cost = {["Iron Bar"] = 20, Coins = 500}, craftingxp = 100, craftinglevel = 4,
+			bonusleveltype = "Fighting", bonuslevel = 5, bonusinfo = {["Max Damage"] = "2", Speed = "2", Accuracy = "65%"}
+			},
+		},
+		["Furnace"] = {
+			[0] = {name = "Stone Furnace", bonusinfo = {["Max capacity"] = "10", ["Smelt Speed"] = "1"}},
+			[1] = {name = "Copper Furnace", cost = {["Copper Bar"] = 25, Coins = 1000, Stone = 500}, craftingxp = 250, craftinglevel = 6,
+				bonusinfo = {["Max capacity"] = "25", ["Smelt Speed"] = "1.25",}},
+			[2] = {name = "Iron Oven", cost = {["Iron Bar"] = 50, Coins = 2000, Stone = 1000}, craftingxp = 1000, craftinglevel = 12,
+				bonusinfo = {["Max capacity"] = "50", ["Smelt Speed"] = "1.5",}},
+		},
+		["Fishing Rod"] = {
+			[0] = {name = "Basic Fishing Rod", bonusinfo = {["Luck Factor"] = "1x", ["Bait Chance"] = "1x"}},
+			[1] = {name = "Sturdy Fishing Rod", cost = {["Iron Bar"] = 40, Coins = 1200}, craftingxp = 300, craftinglevel = 7, 
+			bonusleveltype = "Fishing", bonuslevel = 8, bonusinfo = {["Luck Factor"] = "1.2x", ["Bait Chance"] = "1.1x"}},
+		}
+	},
+	brewing = {
+		potions = { -- Add potions here
+			["Health Potion"] = { -- Add information for each potion
+				description = "Adds 5 health to your character while in battle.",
+				cost = {Mushrooms = 10 }, -- Add resource costs here
+				brewtime = 60, -- Time in seconds (to brew)
+				brewtype = "instant", -- Affects how it behaves
+				effect = "health", -- System will automatically find it's effect, and determine what to do with it
+				effectamount = 5, -- Should add 5 health upon consuming.
+				xp = 30, -- Give 25 XP when collecting potion 
+			},
+			["Super Health Potion"] = { 
+				description = "Adds 15 health to your character while in battle.",
+				cost = {Mushrooms = 25 }, 
+				brewtime = 180,
+				brewtype = "instant", 
+				effect = "health", 
+				effectamount = 15, 
+				xp = 75, 
+			},
+			["Farming Potion"] = { 
+				description = "Doubles the speed of crop growth for 20 minutes with bonemeal.",
+				cost = {Mushrooms = 5, Carrots = 10, Bones = 2 }, 
+				brewtime = 300,
+				brewtype = "timer", -- Will have a timer
+				effecttime = 1200, -- How long it lasts
+				xp = 120, 
+			},
+		},
+	},
+	fighting = {
+		enemystats = {
+			Fields = {
+				["Rat"] = {	rarity = 30, health = 10, attack = 2, defense = 1, accuracy = 50, evasion = 1, speed = 1},
+				["Chicken"] = {	rarity = 55, health = 8, attack = 2, defense = 1.25, accuracy = 55, evasion = 1.3, speed = 1.1},
+				["Lizard"] = {	rarity = 75, health = 3, attack = 2, defense = 1.5, accuracy = 60, evasion = 2.5, speed = 1.2},
+				["Rabbit"] = {	rarity = 90, health = 6, attack = 2, defense = 1.4, accuracy = 65, evasion = 1, speed = 1.5},
+				["Wasp"] = {	rarity = 100, health = 2, attack = 3, defense = 1, accuracy = 80, evasion = 4, speed = 3},
+			},
+		},
+		enemyrewards = {
+			["Rat"] = {
+				[1] = {reward = "Bones", min = 3, max = 5, chance = 1},
+				[2] = {reward = "Cheese", min = 1, max = 1, chance = 1/3},
+			},
+			["Wasp"] = {
+				[1] = {reward = "Stinger", min = 1, max = 1, chance = 1},
+				[2] = {reward = "Wasp Wings", min = 2, max = 2, chance = 1/2}
+			},
+			["Chicken"] = {
+				[1] = {reward = "Raw Chicken", min = 1, max = 1, chance = 1},
+				[2] = {reward = "Feathers", min = 5, max = 10, chance = 1},
+				[3] = {reward = "Bones", min = 1, max = 2, chance = 1},
+			},
+			["Lizard"] = {
+				[1] = {reward = "Lizard Skin", min = 2, max = 6, chance = 1},
+			},
+			["Rabbit"] = {
+				[1] = {reward = "Carrots", min = 1, max = 3, chance = 1},
+				[2] = {reward = "Bones", min = 3, max = 6, chance = 1},
+			},
+		},
+		weaponstats = {
+			["Basic Sword"] = {damage = 1, speed = 1, accuracy = 50},
+			["Iron Dagger"] = {damage = 2, speed = 2, accuracy = 65}
+		},
+		enemyxpbonus = {
+			["Rat"] = 20,
+			["Chicken"] = 20,
+			["Lizard"] = 25,
+			["Rabbit"] = 40,
+			["Wasp"] = 60,
+		}
+	},
+	achievements = {
+		None = {easy = {Description = ""}},
+		Mining = {
+			easy = {
+				{Description = "Click the mine button 250 total times", goalnum = 250, goal = "Clicks"},
+				{Description = "Have 1500 stone once at any given time", goalnum = 1500, goal = "Stone"},
+				{Description = "Mine 50 total copper", goalnum = 50, goal = "TotalCopper"},
+				Reward = "Gain 30% extra Mining XP when mining."
+			},
+			medium = {
+				{Description = "Click the mine button 2500 total times", goalnum = 2500, goal = "Clicks"},
+				{Description = "Mine 125 total iron", goalnum = 125, goal = "TotalIron"},
+				{Description = "Sell over 5000 stone to the NPC at once"},
+				Reward = "Have a 50% higher chance to get rare ores."
+			},
+		},
+		Crafting = {
+			easy = {
+				{Description = "Upgrade your pickaxe"},
+				{Description = "Smelt exactly 9 copper bars at once"},
+				{Description = "Smelt iron bars"},
+		        Reward = "Gain 25% more Crafting XP when smelting bars."
+			},
+			medium = {
+				{Description = "Smelt 100 total iron bars", goalnum = 100, goal = "Total Iron Bar"},
+				{Description = "Get to level 15 crafting", goalnum = 15, goal = "Crafting_Level"},
+				{Description = "Upgrade Furnace to Iron Oven"},
+				Reward = "Smelt bars 50% faster, and have a 10% chance of getting an extra bar."
+			},
+		},
+		Brewing = {
+			easy = {
+				{Description = "Brew 5 total potions", goalnum = 5, goal = "TotalPotions"},
+				{Description = "Drink health potions while fighting 2 total times", goalnum = 2, goal = "FightPots"},
+				{Description = "Drink a Farming Potion with 3 or more crops planted"},
+				Reward = "Each potion costs 5 less mushrooms, if they cost any."
+			},
+		},
+		Farming = {
+			easy = {
+				{Description = "Gain 10 or more mushrooms in one harvest"},
+				{Description = "Harvest 60 total mushrooms", goalnum = 60, goal = "TotalMushrooms"},
+				{Description = "Use a shinifier on a mushroom"},
+				Reward = "Doubles chance of a planted crop becoming shiny."
+			},
+			medium = {
+				{Description = "Harvest a shiny mushroom, and get 75+ mushrooms"},
+				{Description = "Plant a crop that becomes shiny"},
+				{Description = "Harvest a carrot in under 2 seconds using sprinklers"},
+				Reward = "Gain seeds slowly and passively, offline. <br/> Mushroom: 1/5000 Carrot: 1/7500"
+			},
+		},
+		Fighting = {
+			easy = {
+			{Description = "Beat every enemy from the fields at least once"},
+			{Description = "Loot 3 total cheese from rats", goalnum = 3, goal = "TotalCheese"},
+			{Description = "Loot wings from the wasp"},
+			Reward = "Have 5 extra health per battle."
+			},
+			medium = {
+			{Description = "Earn 100 total bones from all enemies", goalnum = 100, goal = "TotalBones"},
+			{Description = "Beat a wasp with a Basic Sword"},
+			{Description = "Loot 150 total feathers from chickens", goalnum = 150, goal = "TotalFeathers"},
+			Reward = "50% Chance of looting double."
+			},
+		},
+		Fishing = {
+			easy = {
+				{Description = "Catch 5 salmon.", goalnum = 5, goal = "SalmonCaught"},
+				{Description = "Catch a fish within 6 seconds of casting your fishing rod"},
+				{Description = "Catch 20 total fish", goalnum = 20, goal = "TotalFish"},
+		   Reward = "25% more fishing luck."
+			}
+		}
+	},
+	mining = {
+		pickinfo = {
+			pick1 = {
+				cost = {
+					["Stone"] = 50,
+					["Coins"] = 100,
+				},
+				requirelevel = {
+					["Mining"] = 8, 
+					["Crafting"] = 1,
+				},
+				craftbonus = 40, -- Gain 40 Crafting XP upon crafting
+				xpbonus = 1.2, -- Multiply how much Mining XP
+				orechances = { -- Chance of mining an ore/mine (in this case, copper)
+				["Copper"] = 0.1, 
+				},
+			},
+			pick2 = {
+				cost = {
+					["Stone"] = 500,
+					["Coins"] = 1000,
+					["Copper Bar"] = 25,
+				},
+				requirelevel = {
+					["Mining"] = 16, 
+					["Crafting"] = 4,
+				},
+				craftbonus = 200,
+				xpbonus = 1.4,
+				orechances = {
+					["Copper"] = 0.25, 
+					["Iron"] = 0.05, 
+				},
+			},
+			pick3 = { 
+				cost = {
+					["Stone"] = 2500,
+					["Coins"] = 7500,
+					["Copper Bar"] = 20,
+					["Iron Bar"] = 50,
+				},
+				requirelevel = {
+					["Mining"] = 27, 
+					["Crafting"] = 18,
+				},
+				craftbonus = 900,
+				xpbonus = 1.8,
+				orechances = {
+					["Copper"] = 0.4, 
+					["Iron"] = 0.1,
+					["Silver"] = 0.03,
+				},
+				oremults = {
+					["Stone"] = 1.25
+				},
+				Gemchancemult = 1.5, -- Multiply the chance of getting a rare gem
+			},
+			pick4 = {
+				cost = {["Coins"] = 30000, ["Silver Bar"] = 100, ["Iron Bar"] = 300,
+				["Bones"] = 50,
+				},
+				requirelevel = {
+					Mining = 40,
+					Crafting = 28
+				},
+				craftbonus = 6000,
+				xpbonus = 2.4,
+				orechances = {
+					Copper = 0.6, Iron = 0.2, Silver = 0.1, Gold = 0.01
+				},
+				Gemchancemult = 1.7
+			}
+		},
+	},
+	market = {
+		farm = {
+		seedslist = {"Mushroom Seed", "Carrot Seed"},
+		animalist = {"Chickens", "Pigs", "Cows", "Horses", "Bees", "Sheep"},
+		toolist = {"Sprinkler", "Shinifier","Buckets"},
+		seeds = {
+		["Mushroom Seed"] = {levels = {2, 3, 5, 7, 10}, farmlevel = {1, 8, 17, 26, 40}, coins = 500},
+		["Carrot Seed"] = {levels = {3, 5, 7, 10, 20}, farmlevel = {10, 20, 27, 38, 55}, coins = 150}, },
+		animals = {
+		["Chickens"] = {farmlevel = {5, 20}, coins = 1000, stock = {2, 3}, chance = {90, 100}, max = 6},
+		["Pigs"] = {farmlevel = {15, 30, 45}, coins = 4500, stock = {1, 1, 2}, chance = {70, 90, 100}, max = 5},
+		["Cows"] = {farmlevel = {26, 40, 55, 70}, coins = 12000, stock = {1, 1, 2, 3}, chance = {55, 75, 90, 100}, max = 4},
+		["Horses"] = {farmlevel = {34, 48, 57, 70, 90}, coins = 20000, stock = {1, 1, 1, 2, 3}, chance = {45, 60, 75, 90, 100}, max = 3},
+		["Bees"] = {farmlevel = {40, 50, 59, 72, 85}, coins = 750, stock = {3, 5, 8, 10, 12}, chance = {50, 60, 75, 85, 100}, max = 40},
+		["Sheep"] = {farmlevel = {51, 63, 75, 85, 95}, coins = 7000, stock = {1, 2, 3, 3, 4}, chance = {50, 65, 80, 90, 100}, max = 5}
+		},
+		tools = {
+			["Sprinkler"] = {farmlevel = {9, 16, 25, 40, 57}, min = {1, 1, 2, 3}, max = {1, 2, 5, 10, 15}, coins = {25, 20, 16, 12}},
+			["Shinifier"] = {farmlevel = {20, 32, 45, 60}, min = {0, 1, 1, 1}, max = {1, 1, 2, 3}, coins = {750, 600, 500, 450}},
+			["Buckets"] = {farmlevel = {26, 39, 50, 65, 77, 89}, min = {2, 3, 4, 5, 7, 9}, max = {3, 5, 8, 10, 12, 15}, coins = {100, 90, 80, 70, 65, 55}},
+		}
+		},
+		npcvals = {
+			["Stone"] = 1,
+			["Mushrooms"] = 40,
+			["Carrots"] = 25,
+			["Carrot Seed"] = 120,
+			["Mushroom Seed"] = 300,
+			["Copper"] = 2,
+			["Copper Bar"] = 3,
+			["Iron"] = 5,
+			["Iron Bar"] = 10,
+			["Silver"] = 10,
+			["Silver Bar"] = 20,
+			["Tuna"] = 8,
+			["Salmon"] = 12,
+		--	["Platinum"] = 150,
+		--	["Platinum Bar"] = 250,
+			["Gold"] = 400,
+			["Gold Bar"] = 750,
+		--	["Titanium"] = 6000,
+		--	["Titanium Bar"] = 15000,
+		--	["Super Ore"] = 50000,
+		--	["Super Bar"] = 120000,
+			["Dragon Ore"] = 1000000,
+		--	["Dragon Bar"] = 5000000,
+		},
+		catslist = {
+			"Fighting", "Fishing"
+		},
+		npcbuyvals = {
+			["Stone"] = {price = 2, lamda = 100, min = 50, max = 1000, zeroInflation = 0.01},
+			["Copper"] = {price = 3, lamda = 35, min = 10, max = 500, zeroInflation = 0.1},
+			["Mushroom Seed"] = {price = 600, lamda = 1.25, min = 0, max = 10, zeroInflation = 0.95},
+			["Mushrooms"] = {price = 80, lamda = 10, min = 5, max = 100, zeroInflation = 0.8},
+			["Carrots"] = {price = 45, lambda = 15, min = 9, max = 50, zeroInflation = 0.84},
+			["Iron"] = {price = 6, lamda = 12, min = 5, max = 100, zeroInflation = 0.6},
+			["Copper Bar"] = {price = 4, lamda = 25, min = 5, max = 200, zeroInflation = 0.4},
+			["Iron Bar"] = {price = 12, lamda = 10, min = 3, max = 25, zeroInflation = 0.65},
+			["Silver"] = {price = 15, lambda = 6, min = 2, max = 15, zeroInflation = 0.76},
+			["Silver Bar"] = {price = 25, lambda = 5, min = 2, max = 10, zeroInflation = 0.8},
+			["Carrot Seed"] = {price = 160, lamdba = 2, min = 1, max = 4, zeroInflation = 0.96},
+			["Shinifier"] = {price = 500, lambda = 1, min = 0, max = 2, zeroInflation = 0.97},
+			["Sprinkler"] = {price = 10, lambda = 3, min = 1, max = 10, zeroInflation = 0.92},
+			["Tuna"] = {price = 10, lambda = 9, min = 4, max = 30, zeroInflation = 0.85},
+			["Salmon"] = {price = 20, lambda = 8, min = 3, max = 25, zeroInflation = 0.89},
+			["Gold"] = {price = 600, lambda = 4, min = 2, max = 10, zeroInflation = 0.98},
+			["Gold Bar"] = {price = 1000, lambda = 3, min = 1, max = 8, zeroInflation = 0.985},
+			["Bones"] = {price = 20, lambda = 10, min = 5, max = 30, zeroInflation = 0.8},
+		},
+		marketranges = {
+			["Stone"] = {["Min"] = 1,["Max"] = 3,},
+			["Health Potion"] = {["Min"] = 500,["Max"] = 1200},
+			["Mushrooms"] = {	["Min"] = 50,["Max"] = 125,},
+			["Carrots"] = {["Min"] = 30, ["Max"] = 75},
+			["Carrot Seed"] = {["Min"] = 150, ["Max"] = 450},
+			["Mushroom Seed"] = {	["Min"] = 400,["Max"] = 1200,},
+			["Copper"] = {["Min"] = 2,["Max"] = 5,},
+			["Copper Bar"] = {["Min"] = 3, ["Max"] = 6,},
+			["Iron"] = {["Min"] = 5, ["Max"] = 10,},
+			["Iron Bar"] = {["Min"] = 10,["Max"] = 20,},
+			["Silver"] = {["Min"] = 12,["Max"] = 24,},
+			["Silver Bar"] = {["Min"] = 25,["Max"] = 75,},
+			["Tuna"] = {["Min"] = 10, ["Max"] = 20},
+			["Salmon"] = {["Min"] = 20, ["Max"] = 40},
+			--["Platinum"] = {	["Min"] = 150,["Max"] = 450,},
+			--["Platinum Bar"] = {	["Min"] = 300,["Max"] = 900,},
+			["Gold"] = {["Min"] = 500,["Max"] = 1500,},
+			["Gold Bar"] = {["Min"] = 900,["Max"] = 2700,},
+			["Bones"] = {Min = 25, Max = 75},
+		--	["Titanium"] = {["Min"] = 7500,["Max"] = 15000,},
+		--	["Titanium Bar"] = {["Min"] = 20000,["Max"] = 60000,},
+			--["Super Ore"] = {["Min"] = 75000,["Max"] = 150000,},
+			--["Super Bar"] = {["Min"] = 300000,["Max"] = 1000000,},
+			["Dragon Ore"] = {["Min"] = 1250000,["Max"] = 2500000,},
+		--	["Dragon Bar"] = {["Min"] = 50000000,["Max"] = 25000000,},
+		},
+		sortcatergories = {
+			["Stone"] = "Ores",
+			["Mushrooms"] = "Farming",
+			["Mushroom Seed"] = "Farming",
+			["Copper"] = "Ores",
+			["Copper Bar"] = "Crafting",
+			["Iron"] = "Ores",
+			["Iron Bar"] = "Crafting",
+			["Silver Bar"] = "Crafting",
+			["Silver"] = "Ores",
+			["Carrots"] = "Farming",
+			["Carrot Seed"] = "Farming",
+		--	["Platinum"] = "Ores",
+		--	["Platinum Bar"] = "Crafting",
+			["Gold"] = "Ores",
+			["Gold Bar"] = "Crafting",
+			["Bones"] = "Farming",
+		--	["Titanium"] = "Ores",
+		--	["Titanium Bar"] = "Crafting",
+		--	["Super Ore"] = "Ores",
+		--	["Super Bar"] = "Crafting",
+			["Dragon Ore"] = "Ores",
+		--	["Dragon Bar"] = "Crafting",
+			["Health Potion"] = "Fighting",
+			["Tuna"] = "Fishing",
+			["Salmon"] = "Fishing",
+		}
+	},
+	farming = {
+	seeds = {
+	Mushroom = {growtime = 180, minharvest = 5, maxharvest = 10, xpreward = 25, offlinechancePS = 1/5000, seedname = "Mushroom Seed", offset = -1.5},
+	Carrot = {growtime = 300, minharvest = 4, maxharvest = 6, xpreward = 15, offlinechancePS = 1/7500, seedname = "Carrot Seed", offset = 0},},
+	Animals = {
+Chickens={Loot={Bones= 2, Chicken = 1}, Foodtype = "Carrots", Eat = 3, KillXP = 25, ActionName = "Collect Eggs", ReproduceType = "Eggs", Dailyaction = function(player, profile, info, add)local u=profile["UncollectedEggs"]
+if info.Gender=="Female"then profile["UncollectedEggs"]=(u or 0)+1 else if u>=1 then profile["UncollectedEggs"]=(u or 0)-1 add(player,"Fertilized Eggs",1)end end end,ActionDescription = "Lays eggs every 24h.",
+Action=function(_,profile)local u=profile["UncollectedEggs"]profile["Eggs"]=(profile["Eggs"] or 0)+(u or 0)profile["UncollectedEggs"]=0 if u and(u > 0)then return"Collected "..u.." Eggs!",true else return"No eggs to collect!",
+false end end}, Cows = {Loot = {Bones = 20, Meat = 3}, Foodtype = "Grass", Eat = 10, KillXP = 200, ActionDescription = "Produces milk that can be milked with a bucket every 24h."},
+	Horses = {Loot = {Bones = 15}, Foodtype = "Hay", Eat = 10, KillXP = 150, ActionDescription = "Can be used to ride around fast.", BonusTraits = {Agile = 0.1}},
+	Pigs = {Loot = {Bones = 8, Pork = 2}, Foodtype = "Carrots", Eat = 5, KillXP = 120, ActionDescription = "Can be killed to give pork."},
+	Sheep = {Loot = {Bones = 6, Meat = 1}, Foodtype = "Grass", Eat = 5, KillXP = 100, ActionDescription = "Produces wool every 24h that can be shared with shears."},
+	Bees = {Loot = {}, Foodtype = "Flower", Eat = 1, KillXP = 15, MaxResource = 50, ActionName = "Collect Honey", ActionDescription = "Produces honey every 24h.", Dailyaction = function(_, profile) local max = 50 
+profile["UnclaimedHoney"] = math.min(max,(profile["UnclaimedHoney"] or 0)+1)end,Action = function(_, profile) local u = profile["UnclaimedHoney"]
+profile["Honey"] = (profile["Honey"] or 0) + (u or 0) profile["UnclaimedHoney"] = 0 if u and (u > 0) then return "Collected "..u.." Honey!", true else return"No honey to collect!",false end end},
+	},
+	Food = {
+	Carrots = {Carrots = 1},
+	Grass = {Grass = 1},
+	Hay = {Hay = 1},
+	Flower = {Tulip = 1, Rose = 2},
+	},
+	malenames = {"Rick", "James", "Henry", "Jonathan", "Peter", "Dave", "Morgan", "Donald", "Xavier", "Giorno"},
+	femalenames = {"Bella", "Marla", "Jenna", "Anna", "Shirley", "Sophia", "Emily", "Daniella", "Meghan", "Erika"},
+	defects = {Infertile = 0.05, Lame = 0.03, Glutton = 0.1, Aggressive = 0.15},
+	},
+	skills = {"Mining", "Crafting", "Farming", "Fighting", "Brewing", "Fishing"},
+	fishing = {
+	fishorder = {"Tuna", "Salmon"},
+	fish = {Tuna = {chance = 65, fishxp = 10}, Salmon = {chance = 35, fishxp = 20}},
+	rods = {["Basic Fishing Rod"] = {luck = 1, baitmult = 1}, ["Sturdy Fishing Rod"] = {luck = 1.2, baitmult = 1.1}}
+	}
+}
+
+return gameinfo
