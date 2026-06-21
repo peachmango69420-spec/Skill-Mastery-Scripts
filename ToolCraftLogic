@@ -1,0 +1,30 @@
+local rep = game.ReplicatedStorage
+local m = require(rep.Modules.Commonfuncs).GetMods()
+local profiler = m.Profiles
+local gamestats = m.Info
+rep.Craft.CraftItemRequest.OnServerInvoke = function(player, itemname)
+	local profile = profiler.getprofile(player.UserId)
+	local itemindex = (profile[itemname] or 0) + 1
+	local iteminfo = gamestats.upgradeorders[itemname][itemindex]
+	local costs = iteminfo.cost
+	for resource, val in costs do
+		if (profile[resource] or 0) < val and resource ~= "Coins" then return "Not enough "..resource
+		elseif resource == "Coins" then if player.leaderstats.Coins.Value < val then return "You are too poor!"	end
+		end
+	end
+	if iteminfo.craftinglevel > player.SkillXP.Crafting_Level.Value then return "Not enough Crafting experience" end
+	if iteminfo["bonusleveltype"] and 
+		iteminfo.bonuslevel > player.SkillXP:FindFirstChild(iteminfo.bonusleveltype.."_Level").Value then 
+		return "Not enough "..iteminfo.bonusleveltype.." experience"
+	end
+	-- Now we know they have enough resources, let's handle upgrade logic:
+	for resource, val in costs do
+		profiler.removeitem(player, resource, val)
+	end
+	profiler.giveXP(player, "Crafting", iteminfo.craftingxp)
+	profile[itemname] = itemindex
+	if itemname == "Furnace" and itemindex == 2 then
+	  profiler.awardAchievement(player, {Skill = "Crafting", Diff = "medium", Index = 3})
+	end
+	return false
+end
