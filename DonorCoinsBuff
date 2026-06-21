@@ -1,0 +1,101 @@
+local devProducts = {
+    ["1.1x XP"] = 1,   -- -1 Donor Coin
+    ["1.2x XP"] = 2,   -- -2 Donor Coin
+    ["1.25x Stone"] = 3,   -- -3 Donor Coin
+    ["1.5x XP"] = 5,   -- -5 Donor Coin
+    ["2x XP Perm"] = 50,   -- -50 Donor Coin
+}
+
+local SECONDS_IN_3_DAYS = 3 * 24 * 60 * 60
+local profiles = require(game.ReplicatedStorage.DataStoreModule)
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local BuyBuffEvent = ReplicatedStorage:FindFirstChild("BuyBuff")
+
+-- Helper: Setup timers for a player
+local function setupPlayerTimers(player)
+    local buffsFolder = player:WaitForChild("stats")
+    -- Create IntValues for each dev product if not exist
+    for productName, _ in devProducts do
+        if not buffsFolder:FindFirstChild(productName) then
+            local timerValue = Instance.new("IntValue")
+            timerValue.Name = productName
+            timerValue.Value = 0
+            timerValue.Parent = buffsFolder
+        end
+    end
+end
+
+-- Timer decrement logic
+local function startTimerDecrement(player, productName)
+    local buffsFolder = player:WaitForChild("stats")
+    if not buffsFolder then return end
+	local timerValue = buffsFolder:FindFirstChild(productName)
+	if timerValue and timerValue.Name == "2x XP Perm" then return end
+	-- Run timer decrement loop for this player
+	if timerValue and timerValue.Value == SECONDS_IN_3_DAYS then
+	spawn(function()
+		while timerValue and timerValue.Value > 0 do
+				timerValue.Value = timerValue.Value - 1   
+				profiles.removeitem(player, productName, 1)
+				task.wait(1)
+	      end
+	end)
+	end
+end
+
+-- Helper: Get player's Donor Coins IntValue
+local function getDonorCoins(player)
+    local donorCoins = player:FindFirstChild("Donor Coins")
+    if not donorCoins then
+        donorCoins = Instance.new("IntValue")
+        donorCoins.Name = "Donor Coins"
+        donorCoins.Value = 0
+        donorCoins.Parent = player
+    end
+    return donorCoins
+end
+
+-- Handle buff purchase
+local function onBuyBuff(player, productName)
+	local profile = profiles.getprofile(player.UserId)
+    if not devProducts[productName] then return end
+
+    local donorCoins = player.leaderstats:FindFirstChild("Donor Coins")
+    local buffsFolder = player:FindFirstChild("stats")
+    if not buffsFolder then return end
+    local timerValue = buffsFolder:FindFirstChild(productName)
+    if not timerValue then return end
+    local cost = devProducts[productName]
+
+    -- Special case: "2x XP Perm" can only be bought once
+    if productName == "2x XP Perm" and timerValue.Value == true then
+        return -- Already owned, do not allow repurchase
+    end
+
+    if donorCoins.Value < cost then
+        return -- Not enough coins
+    end
+
+    -- Deduct coins
+    profiles.removeitem(player, "Donor Coins", cost)
+
+    -- Add 3 days to timer (except for last dev product)
+	local isLast = (timerValue.Name == "2x XP Perm")
+
+    if not isLast then
+		timerValue.Value = timerValue.Value + SECONDS_IN_3_DAYS
+		profile[timerValue] = timerValue.Value
+    elseif productName == "2x XP Perm" then
+        -- Permanent: set timer to 1 (or any nonzero value to indicate owned)
+		timerValue.Value = true
+		profile[productName] = true
+	end
+	startTimerDecrement(player, productName)
+end
+
+-- Connect RemoteEvent for purchases
+if BuyBuffEvent then
+    BuyBuffEvent.OnServerEvent:Connect(onBuyBuff)
+end
+
