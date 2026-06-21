@@ -1,0 +1,33 @@
+local rep = game.ReplicatedStorage
+local dss = game:GetService("DataStoreService")
+local profiles = require(rep.DataStoreModule)
+local remote = rep.Market.SearchForListingsRequest
+local EXPIRE_TIME = 3*3600*24
+remote.OnServerInvoke = function(player, item)
+	local profile = profiles.getprofile(player.UserId)
+	local leader = player.leaderstats
+	local stats = player.stats
+	local success, datastore = pcall(function()return dss:GetOrderedDataStore(item.."_Listings") end)
+	local listingstore = dss:GetDataStore("Listings")
+	local page
+	if success then
+		local foundlistingsinfo = {}
+		local kes = datastore:GetSortedAsync(true, 6)
+		local cpage = kes:GetCurrentPage()
+		for i, listingid in ipairs(cpage) do
+		local suc, res = pcall(function()
+			return listingstore:GetAsync(listingid.key)
+		end)
+		local postime = res["Publishedtime"]
+		if not postime then return end 
+		local expiry = os.time() - postime
+		if suc and expiry < EXPIRE_TIME then foundlistingsinfo[i] = res 
+		elseif suc and EXPIRE_TIME < expiry then
+			listingstore:RemoveAsync(listingid.key)
+			datastore:RemoveAsync(listingid.key)
+			print("Item was removed due to being expired") end end
+        return foundlistingsinfo
+	else warn("Couldn't find Odatastore for "..item)
+		return {}
+	end
+end
