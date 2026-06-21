@@ -1,0 +1,45 @@
+local event = game.ReplicatedStorage.UseTool
+local ws = game.Workspace
+local cs = game.CollectionService
+local f = require(game.ReplicatedStorage.Modules.Commonfuncs).GetMods()
+event.OnServerEvent:Connect(function(player, toolused:Tool, ind)
+	local profile = f.Profiles.getprofile(player.UserId)
+	local toolname = toolused.Name
+	local tool = toolused:GetAttribute("ToolName")
+	local potioninf = f.Info.brewing.potions[tool]
+	local startertool = player.StarterGear:FindFirstChild(toolname)
+	local toolfunctions = {
+		["Sprinkler"] = function()profile["Plotstats"][ind]["Growfinish"] -= 120 end,
+		["Shinifier"] = function()profile["Plotstats"][ind]["Shiny"] = true end,
+		["Health Potion"] = function()player.Character.Humanoid.Health += potioninf["effectamount"] end,
+		["Super Health Potion"] = function()player.Character.Humanoid.Health += potioninf["effectamount"] end,
+	}
+	local bonustable = toolfunctions[tool]
+	if potioninf and potioninf["brewtype"] == "timer" then f.Profiles.progAchieve(player, {Cat = "Brewing", Diff = "easy", Index = 1}, 1)
+		if not bonustable then print( os.time() + (potioninf["effecttime"] or 0))
+		profile["Potiontimers"][tool] = os.time() + (potioninf["effecttime"] or 0) end
+	end
+	if tool == "Health Potion" and profile["Fighting"] then
+		profile["Achievprogs"]["FightPots"] = (profile["Achievprogs"]["FightPots"] or 0) + 1
+		if profile["Achievprogs"]["FightPots"] >= 2 then 
+			f.Profiles.awardAchievement(player, {Skill = "Brewing", Diff = "easy", Index = 1})
+		end
+	end
+	local amount = 0
+	for i = 1, 4 do
+		local pstats = profile["Plotstats"][i]
+		if pstats and pstats["Growing"] then amount += 1 end
+	end
+	if tool == "Farming Potion" and amount >= 3 then
+		f.Profiles.awardAchievement(player, {Skill = "Brewing", Diff = "easy", Index = 3})
+	end
+	if not toolused then return end
+	pcall(toolfunctions[tool])
+	if ind and profile["Plotstats"][ind]["Currentcrop"] == "Mushroom" and tool == "Shinifier" then
+	f.Profiles.awardAchievement(player, {Skill = "Farming",Diff = "easy", Index = 3 }) end
+	local toolamount = toolused:GetAttribute("Amount") 
+	if toolamount > 1 then toolamount -= 1 toolused:SetAttribute("Amount", toolamount) toolused.Name = tool .. " x " .. toolamount
+	startertool:SetAttribute("Amount", toolamount) startertool.Name = tool .. " x " .. toolamount profile[tool] -= 1
+	else toolused:Destroy() startertool:Destroy() profile[tool] = 0
+	end
+end) -- This script can be very useful for things like potions in alchemy/brewing, etc.
