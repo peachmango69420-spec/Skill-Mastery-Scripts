@@ -1,0 +1,133 @@
+local rep = game.ReplicatedStorage
+local datastoreservice = game:GetService("DataStoreService")
+local stats = require(rep.GameStatsInfo)
+local profiles = require(rep.DataStoreModule)
+local request = rep.Market.ListRequest
+local listings = datastoreservice:GetDataStore("Listings")
+request.OnServerInvoke = function(player, item, amount, price, nmbr)
+	local profile = profiles.getprofile(player.UserId)
+	--profiles.updateprofile(player.UserId, "Listings", {})
+	local tnmbr = 1
+	local leader = player.leaderstats
+	local stat = leader:FindFirstChild(item) or player.stats:FindFirstChild(item)
+	local datastore = datastoreservice:GetDataStore("Listings")
+	local specificds = datastoreservice:GetOrderedDataStore(item.."_Listings")
+	local playerlistings = (profile["Listings"] or {})
+	if not playerlistings or playerlistings == 0 then profiles.updateprofile(player.UserId, "Listings", {}) end
+	for _,v in pairs(playerlistings) do
+		tnmbr += 1
+	end 
+	if tnmbr > 3 then return false, "Too many listings!" end
+	if playerlistings["Listing"..nmbr] then return false, "You already listed in this slot!" end
+	local store = profile[item]
+	if stat then
+		if stat.Value >= amount then
+		if(stats.market.marketranges[item].Min > price)or(stats.market.marketranges[item].Max < price)then return false,"The item price must be in range!"end
+		profiles.removeitem(player, item, amount)
+		local listingid = tonumber(price..tostring(DateTime.now())..math.random(100,999))
+			local id = player.UserId
+			local sellinfo = {
+				["Publishedtime"] = os.time(),
+				["Item"] = item,
+				["Amountleft"] = amount,
+				["Price"] = price,
+				["ListingID"] = listingid,
+				["SellerID"] = tonumber(id),
+				["Unclaimedcoins"] = 0,
+			}
+		datastore:SetAsync(listingid, sellinfo)
+		local suc, res = pcall(function() specificds:SetAsync(listingid, listingid) end)
+		if not suc then warn("Could not store ods") end
+		profiles.updateprofile(id, "Listings", listingid, "Listing"..nmbr)
+		return  true, "Sucessfully listed!"
+		elseif stat.Value < amount then
+			return false, "You do not have enough!"
+		end
+	elseif store then
+		if store >= amount then
+			if(stats.market.marketranges[item].Min > price)or(stats.market.marketranges[item].Max < price)then return false,"The item price must be in range!"end
+			profiles.removeitem(player, item, amount)
+			local listingid = tonumber(price..tostring(DateTime.now())..math.random(100,999))
+			local id = player.UserId
+			local sellinfo = {
+				["Publishedtime"] = os.time(),
+				["Item"] = item,
+				["Amountleft"] = amount,
+				["Price"] = price,
+				["ListingID"] = listingid,
+				["SellerID"] = tonumber(id),
+				["Unclaimedcoins"] = 0,
+			}
+			datastore:SetAsync(listingid, sellinfo)
+			profiles.updateprofile(id, "Listings", listingid, "Listing"..nmbr)
+			local suc, res = pcall(function() specificds:SetAsync(listingid, listingid) end)
+			if not suc then warn("Could not store ods") end
+			return  true, "Sucessfully listed!"
+		elseif stat.Value < amount then
+			return false, "You do not have enough!"
+		end
+	end
+	return false, "Error"
+end
+-- Return listings info on event
+local refresh = game.ReplicatedStorage.Market.ListingsInfoRefresh
+refresh.OnServerInvoke = function(player, listingnum)
+	task.wait()
+	local profile = profiles.getprofile(player.UserId)
+	if not profile then task.wait(1) profile = profiles.getprofile(player.UserId) end
+	local listingids = profile["Listings"]
+	local listingid = listingids[("Listing"..listingnum)]
+	if listingid then
+		local listing = listings:GetAsync(listingid)
+		if listing then 
+		return true, listing
+		else profile["Listings"]["Listing"..listingnum] = nil return false, nil end
+	end
+	return false, nil
+end
+-- Reward the player's "Claim Coins"
+local function claimcoins(player, listing)
+	local profile = profiles.getprofile(player.UserId)
+	local listingids = profile["Listings"]
+	local listingid = listingids["Listing"..listing]
+	local coins = player.leaderstats.Coins
+	if listingid then
+		local listings = datastoreservice:GetDataStore("Listings")
+		local listing = listings:GetAsync(listingid)
+		local unclaimed = listing["Unclaimedcoins"]
+		if unclaimed then 
+			profiles.additem(player, "Coins", unclaimed)
+			listings:UpdateAsync(listingid, function(old)
+				local old = old or {}
+				local unc = old["Unclaimedcoins"]
+				if unc then old["Unclaimedcoins"] = 0 end
+				return old
+			end)
+		end
+		return listingid
+	end
+end
+rep.Market.ClaimCoins.OnServerEvent:Connect(function(player, listing)claimcoins(player, listing)end)
+-- And remove listings:
+rep.Market.RemoveListing.OnServerEvent:Connect(function(player, listing, item)
+	local listingid = claimcoins(player, listing)
+	if listingid then 
+		local profile = profiles.getprofile(player.UserId)
+		local listingids = profile["Listings"]
+		local speclistings = datastoreservice:GetOrderedDataStore(item.."_Listings")
+		local listingstore = datastoreservice:GetDataStore("Listings")
+		local speclisting = speclistings:GetAsync(listingid)
+		local listin = listingstore:GetAsync(listingid)
+		if listin then
+			listingstore:RemoveAsync(listingid)
+		end
+		if speclisting then
+			speclistings:RemoveAsync(listingid)
+			else warn("Not Async!")
+		end
+		profiles.updateprofile(player.UserId, "Listings", nil, "Listing"..listing)
+		profiles.additem(player, listin["Item"], listin["Amountleft"]) return
+	else
+		return false, "You don't have that listing!"
+	end
+end)
