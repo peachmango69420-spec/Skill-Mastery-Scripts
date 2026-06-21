@@ -1,0 +1,56 @@
+local rep = game.ReplicatedStorage
+local stockupdater = rep.Market.NewNPCStockRefresh
+local poissonCalculator = require(game.ReplicatedStorage.Modules.PoissonMath)
+local info = require(rep.GameStatsInfo)
+local buy = rep.Market.BuyNPCItemRequest
+local funcs  = require(rep.Modules.Commonfuncs)
+local profiles = require(rep.DataStoreModule)
+local currentstock = {}
+local function getNewStock()
+	currentstock = {}
+	local SEED_NUM = os.time() // 600
+	local res = poissonCalculator.generateStockForItems(info.market.npcbuyvals, SEED_NUM)
+	currentstock[SEED_NUM] = res
+	for _, i in game.Players:GetPlayers() do
+		profiles.updateprofile(i.UserId, "CurrentStockLeft", res)
+		profiles.updateprofile(i.UserId, "CurrentStockLeft", SEED_NUM, "LastCron")
+	end
+	stockupdater:FireAllClients(res)
+	return res
+end
+getNewStock()
+buy.OnServerInvoke = function(player:Player, item, quantity) 
+	local currentcroncycle = os.time() // 600
+	local profile = profiles.getprofile(player.UserId)
+	local purchases = profile["CurrentStockLeft"]
+	local itemleft = purchases[item]
+	local totalcost = info.market.npcbuyvals[item].price * quantity
+	if itemleft < quantity then return false, "Not enough items left!"
+	elseif totalcost > (profile["Coins"] or 0) then return false, "You need more coins!"
+	else profiles.updateprofile(player.UserId, "CurrentStockLeft", -quantity, item)
+		profiles.removeitem(player, "Coins", totalcost)
+		profiles.additem(player, item, quantity)
+		local newquantity = profiles.getprofile(player.UserId)
+		stockupdater:FireClient(player, newquantity["CurrentStockLeft"])
+		return true, "sucess!"
+	end
+end
+rep.Market.GetCurrentInfo.OnServerEvent:Connect(function(player) local currentcron = currentstock[os.time()//600]
+	local callres, profile = funcs.withRetries(3, function() return profiles.getprofile(player.UserId) end)
+	if not profile then task.wait(2)
+		profile = profiles.getprofile(player.UserId) or {CurrentStockLeft = {}}
+	end
+	local stok = profile["CurrentStockLeft"]["LastCron"]
+	if not stok or (stok and stok ~= os.time()//600) then
+		profiles.updateprofile(player.UserId, "CurrentStockLeft", currentcron)
+		profiles.updateprofile(player.UserId, "CurrentStockLeft", os.time()//600, "LastCron")
+	end 
+	local newstuff = profiles.getprofile(player.UserId)["CurrentStockLeft"]
+	stockupdater:FireClient(player, newstuff) end)
+local timeuntilnextcron = 600 - (os.time() % 600)
+task.wait(timeuntilnextcron)
+print("Cron Passed!")
+getNewStock()
+while task.wait(600) do
+	getNewStock()
+end
