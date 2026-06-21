@@ -1,2 +1,2 @@
-# Skill-Mastery-Scripts
-Some front-end and back-end code for Skill Mastery
+# ReplicatedStorage Modules
+Code used both by back-end and front-end scripts with modularity or containing lots of info
