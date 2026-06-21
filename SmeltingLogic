@@ -1,0 +1,43 @@
+local rep = game.ReplicatedStorage
+local event = rep.Craft.SmeltBars local profiler = require(rep.DataStoreModule) local designinfo = require(rep.GameStatsInfo)
+event.OnServerInvoke = function(player:Player, barname:string, amount:number)
+	local profile = profiler.getprofile(player.UserId)
+	local currentsmeltbar = profile["Currentbar"]
+	if currentsmeltbar then return false, "Already smelting bar!" end
+	local cost = designinfo.smeltingingo[barname].costamount if not cost then return false, "Failure in bar. Report to dev." end
+	local resourcecost = designinfo.smeltingingo[barname].cost
+	local totalcost = cost * amount
+	if totalcost > (profile[resourcecost] or 0) then return false, "You don't have enough resources!" end
+	-- Now bar logic
+	profiler.removeitem(player, resourcecost, totalcost)
+	profile["Currentbar"] = barname
+	profile["Smeltstart"] = os.time()
+	profile["Barsclaimed"] = 0
+	profile["Barsmeltingamount"] = amount
+	profile["Achievprogs"]["Total "..barname] = (profile["Achievprogs"]["Total "..barname] or 0) + amount
+	if barname == "Copper Bar" and amount == 9 then profiler.awardAchievement(player, {Skill = "Crafting", Diff = "easy", Index = 2}) 
+	elseif barname == "Iron Bar" then profiler.awardAchievement(player, {Skill = "Crafting", Diff = "easy", Index = 3})end
+	return true 
+end
+-- Allow player to Claim Bars
+game.ReplicatedStorage.Craft.ClaimBars.OnServerEvent:Connect(function(player)
+	local profile = profiler.getprofile(player.UserId)
+	local hasachiev = profile["Achievsets"]["Crafting"] or {}
+	local furnacespeed = tonumber(designinfo.upgradeorders.Furnace[(profile["Furnace"] or 0)]["bonusinfo"]["Smelt Speed"]) or 1
+	furnacespeed *= ((hasachiev["medium"] and 1.5) or 1)
+	local poiss = require(game.ReplicatedStorage.Modules.PoissonMath)
+	local currentbar = profile["Currentbar"]
+	local totalamount = profile["Barsmeltingamount"]
+	if not currentbar then warn("No current bars") return end
+	local amount = ((os.time() - profile["Smeltstart"]) // designinfo.smeltingingo[currentbar].smeltime) * furnacespeed
+	local bonusbars = hasachiev["medium"] and poiss.samplePoisson(Random.new(os.time()/2), amount/9) or 0
+	amount += bonusbars
+	profile["Barsclaimed"] += amount 
+	profiler.giveXP(player, "Crafting", designinfo.smeltingingo[currentbar].smeltxp * ((hasachiev["easy"] and 1.25) or 1))
+	if amount >= totalamount then amount = totalamount profile["Currentbar"] = nil profile["Barsmeltingamount"] = nil 
+		profile["Barsclaimed"] = nil profile["Smeltstart"] = nil end
+	profile[currentbar] = (profile[currentbar] or 0) + amount
+	if currentbar == "Iron Bar" and profile["Achievprogs"]["Total Iron Bar"] and profile["Achievprogs"]["Total Iron Bar"] >= 100 then 
+		profiler.awardAchievement(player, {Skill = "Crafting", Diff = "medium", Index = 1})
+	end
+end)
