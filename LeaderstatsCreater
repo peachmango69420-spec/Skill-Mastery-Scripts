@@ -1,0 +1,343 @@
+local socialservice = game:GetService("SocialService")
+local HttpService = game:GetService("HttpService")
+local WORKER_URL = "https://roblox-notifications.gabrieljacobovits123.workers.dev"
+local INTERNAL_KEY = "s3cure-notify-ix9z7a" 
+local poissoncalc = require(game.ReplicatedStorage.Modules.PoissonMath)
+local mods = require(game.ReplicatedStorage.Modules.Commonfuncs).GetMods()
+local offlinerewardsev = game.ReplicatedStorage.Update.OfflineRewards
+local coinstore = game:GetService("DataStoreService"):GetOrderedDataStore("Coins")
+local dontsaveprogs = {}
+-- Enable notiifcations?
+local NOTIFS_ENABLED = false
+------------------------
+local plots = {}
+local profiles = require(game.ReplicatedStorage.DataStoreModule)
+socialservice.GameInvitePromptClosed:Connect(function(player, ids)
+	profiles.additem(player, "Donor Coins", 2)
+	print(ids)
+end)
+-- Refference plots
+local dayrewards = {
+	{item = "Coins", amount = 5},
+	{item = "Donor Coins", amount = 1},
+	{item = "Stone", amount = 100},
+	{item = "Copper", amount = 50},
+	{item = "Shinifier", amount = 1},
+	{item = "Coins", amount = 1000},
+	[0] = {item = "Donor Coins", amount = 20},
+}
+local dsmodule = require(game.ReplicatedStorage.DataStoreModule)
+local mathmod = require(game.ReplicatedStorage.Mathematics)
+function Apply(player, profile)
+	local stats = player.stats
+	print("Profile: ", profile)
+	for key, value in pairs(profile) do
+		local startergear = player:WaitForChild("StarterGear")
+		local inventoryitem = game.ServerStorage.Tools:FindFirstChild(key)
+		local stat = player:FindFirstChild(key, true)
+		if stat and string.find(stat.ClassName, "Value") then
+			stat.Value = value
+		elseif inventoryitem and value >= 1 then 
+			value = math.floor(value)
+			local clone = inventoryitem:Clone()
+			clone:SetAttribute("Amount", value)
+			clone.Name = key .. " x " .. value
+			clone.Parent = startergear
+			local clone2 = clone:Clone()
+			clone2.Parent = player.Backpack
+		end
+	end
+	local items = {
+		"1.1x XP",
+		"1.2x XP",
+		"1.25x Stone",
+		"1.5x XP",
+	    "2x XP Perm",
+	}
+	local lowestUnclaimed = 1
+	for i = 1, 3 do
+		if not plots[i] then lowestUnclaimed = i break end
+	end
+	plots[lowestUnclaimed] = player.UserId
+	local plot = workspace:WaitForChild("Plot"..lowestUnclaimed)
+	plot.Sign.Plot.UserPlotSign.Text = player.Name.."'s plot"
+	plot:AddTag(player.UserId)
+	for _, item in items do
+		local timerValue = stats:FindFirstChild(item) if item == "2x XP Perm" then return end
+	task.spawn(function()
+		while timerValue and timerValue.Value > 0 do
+			timerValue.Value = timerValue.Value - 1   
+			task.wait(1)
+		end
+	end)
+	end
+end
+
+function LoadProfile(player)
+	local key = player.UserId
+	local raw, err = dsmodule.GetRaw("Profiles", key)
+	local profile
+	if raw then
+		profile = raw
+		-- Calculate offline gain
+		if profile["Achievsets"] and profile["Achievsets"]["Farming"] and profile["Achievsets"]["Farming"]["medium"] then
+			for seed, thing in mods.Info.farming do
+				profile["OfflineGains"][thing.seedname] = {rate = thing.offlinechancePS, mult = 1}
+			end
+		end
+		local difftime = math.min(os.time() - profile["lastonline"], 21600)
+		local offlinerewards = {}
+		for Itemname, countinfo in pairs(profile["OfflineGains"]) do 
+			local amount = poissoncalc.samplePoisson(nil, countinfo.rate * difftime) * (countinfo["mult"] or 1)
+			offlinerewards[Itemname] = (offlinerewards[Itemname] or 0) + amount
+			profile[Itemname] += amount
+		end
+		offlinerewardsev:FireClient(player, offlinerewards, difftime)
+		-- Make up for lost potion time:
+		local maxtimes = {}
+		for potion, timer in profile["Potiontimers"] do
+			maxtimes[potion] = math.clamp(timer - os.time(), 0, difftime)
+		end
+		if profile["Animals"] then
+			for animalname, animals in profile["Animals"] do
+				for i, animalinfo in animals do
+					if animalinfo["Dead"] then continue end
+					local birth = animalinfo.Birth
+					local ageleft = (profile["lastonline"] - birth) // 86400
+					local currentage = (os.time() - birth) // 86400
+					if ageleft > currentage then print("Animal got older! Age diff:",ageleft, currentage) local agediff = currentage - ageleft
+					local consumption = mods.Info.farming.Animals[animalname].Eat
+					local totalFood = consumption
+					if animalinfo["Defects"]["Glutton"] then totalFood *= 2 end
+					local food = profile["AnimalFood"][animalname]
+					for i = 1, agediff do
+					if food >= totalFood and (not animalinfo["Dead"]) then profile["AnimalFood"][animalname] -= totalFood
+					else animalinfo["Dead"] = true print(animalinfo.Name .. " died due to malnutrition!") animalinfo["DiedAt"] = birth + (86400 * (ageleft + i)) continue end
+					animalinfo["IsGroomed"] = false
+					local daily = mods.Info.farming.Animals[animalname].Dailyaction
+					if daily then daily(player, profile, animalinfo, mods.Profiles.additem) end end
+					local timeleft = 86400 - ((os.time() - birth)%86400)
+					task.delay(timeleft, function()
+						if player and player.Parent then
+						currentage += 1 print("Animal got older! Now is ".. currentage.. " days old!") 
+					if profile["AnimalFood"][animalname] >= totalFood and (not animalinfo["Dead"]) then profile["IsGroomed"] = false
+					local daily = mods.Info.farming.Animals[animalname].Dailyaction
+					if daily then daily(player, profile, animalinfo, mods.Profiles.additem) end profile["AnimalFood"][animalname] -= totalFood else 
+					animalinfo["Dead"] = true animalinfo["DiedAt"] = animalinfo.Birth + (86400 * currentage) print("Animal died from malnutrition!") end end end)
+					end
+				end
+			end
+		end
+		if maxtimes["Farming Potion"] then
+		for _, info in profile["Plotstats"] do
+			info["Growfinish"] -= maxtimes["Farming Potion"]
+		end end
+		task.spawn(function()for nam, achiev in profile["Achievs"] do
+			for diff, info in achiev do
+				for key, val in info do
+					info[key] = nil
+					info[tonumber(key)] = true
+				end
+			end
+		end end)
+	else
+		print("Loading default profile")
+		profile = dsmodule.DefaultProfile(player)
+	end
+	profile["2x XP Perm"] = profile["2x XP Perm"] or false
+	if not profile["2x XP Perm"] then
+		local sucess, result = pcall(function()
+			return game.MarketplaceService:UserOwnsGamePassAsync(player.UserId,1325716983)
+		end)
+		if sucess and result then profile["2x XP Perm"] = true end
+	end
+	profile["Firstsession"] = profile["Firstsession"] or os.time()
+	local EPOCH_TIME = os.time() // 86400
+	local lastlogin = profile["LastlogindaySinceUnixEpoch"]
+	if lastlogin and lastlogin ~= EPOCH_TIME then
+	profile["FarmMarkets"] = {}
+	if EPOCH_TIME - lastlogin == 1 then print("New day!")
+		local dw: number = (profile["Daily_Rewards"] or 0) + 1
+		profile["Daily_Rewards"] = dw
+		profile[dayrewards[dw%7].item] = profile[dayrewards[dw%7].item] or 0
+		profile[dayrewards[dw%7].item] += dayrewards[dw%7].amount * math.ceil(dw/7)
+		game.ReplicatedStorage.Update.DailyRewards:FireClient(player,profile["Daily_Rewards"])
+	elseif EPOCH_TIME - lastlogin > 1 then 
+		profile["Daily_Rewards"] = 0
+	end
+	end
+	profile["LastlogindaySinceUnixEpoch"] = EPOCH_TIME
+	lastlogin = EPOCH_TIME
+	local succes, res = pcall(function() dsmodule.setprofile(player.UserId, profile) end)
+	if not succes then print("Unsucessful.") end
+	Apply(player, profile)
+	
+	return profile
+end
+
+function SaveProfile(playerid, profile)
+	if not profile then return end
+	local theirnum = table.find(plots, playerid) or 0
+	plots[theirnum] = nil
+	local theirplot = workspace:FindFirstChild("Plot"..theirnum)
+	theirplot.Sign.Plot.UserPlotSign.Text = "Unowned Plot" 
+	for _, shiny in theirplot:QueryDescendants("Sparkles") do
+		shiny:Destroy()
+	end
+	if dontsaveprogs[playerid] then dontsaveprogs[playerid] = nil print("Player's progress not saving!") return end
+	local raw = dsmodule.Deserialize(profile)
+	if playerid == 1597014315 and not profile["Carrots"] then print("Profile corrupted? Progress saved!") return end
+	local ok, err = dsmodule.SetRaw("Profiles",playerid, raw)
+	if ok then print("Success!") profile.dirty = false else profile.dirty = true print("Failed to save profile!")	
+	end
+end
+
+local Skills = require(game.ReplicatedStorage.GameStatsInfo).skills
+local hiddenstats = {
+	["DialogueProgress"] = 0,
+	["1.1x XP"] = 0,
+	["1.2x XP"] = 0,
+	["1.25x Stone"] = 0,
+	["1.5x XP"] = 0,
+	["2x XP Perm"] = false,
+	["Copper"] = 0,
+	["Iron"] = 0,
+	["CurrentNPCName"] = "NPC",
+} 
+-- Setup player data
+game.Players.PlayerAdded:Connect(function(player)
+	local id = tonumber(player.UserId)
+	for key, value in ipairs(plots) do
+		if value:GetAttribute("PlayerId") == 0 then
+			value:SetAttribute("PlayerId", id)
+			value:AddTag("Plot"..tostring(id))
+			break
+		end
+	end
+	local leaderstats = Instance.new("Folder")
+	leaderstats.Name = "leaderstats"
+	leaderstats.Parent = player
+	
+	local stats = Instance.new("Folder")
+	stats.Name = "stats"
+	stats.Parent = player 
+	
+	local stone = Instance.new("NumberValue", leaderstats)
+	stone.Name = "Stone"
+	stone.Value = 0
+	
+	local coins = Instance.new("IntValue", leaderstats)
+	coins.Name = "Coins"
+	coins.Value = 0
+	coins.Changed:Connect(function()
+		coinstore:SetAsync(player.UserId, coins.Value)
+	end)
+	local haspass = Instance.new("BoolValue", stats)
+	haspass.Name = "Has2xStone"
+    haspass.Value = false
+	local dcoins = Instance.new("IntValue", leaderstats)
+	dcoins.Name = "Donor Coins"
+
+	local folder = Instance.new("Folder")
+	folder.Name = "SkillXP"
+	folder.Parent = player
+
+	for _, skillname in Skills do
+		local xpVal = Instance.new("NumberValue")
+		xpVal.Name = skillname .. "_XP"
+		xpVal.Value = 0
+		xpVal.Parent = folder
+
+		local levelVal = Instance.new("IntValue")
+		levelVal.Name = skillname .. "_Level"
+		levelVal.Value = 1
+		levelVal.Parent = folder
+	end
+	for itemname, baseval in pairs(hiddenstats) do
+		local type = type(baseval)
+		local item = nil
+		if type == "number" then item = Instance.new("IntValue")
+		elseif type == "string" then item = Instance.new("StringValue")
+		elseif type == "boolean" then item = Instance.new("BoolValue")
+		else item = Instance.new("ObjectValue")
+		end
+		item.Name = itemname
+		item.Value = baseval
+		item.Parent = stats
+	end
+	stone.Changed:Connect(function(newval)
+		if newval >= 1500 then mods.Profiles.awardAchievement(player, {Skill = "Mining", Diff = "easy", Index = 2}) end
+	end)
+	folder.Crafting_Level.Changed:Connect(function(newval)
+		if newval >= 15 then mods.Profiles.awardAchievement(player, {Skill = "Crafting", Diff = "medium", Index = 2}) end
+	end)
+	LoadProfile(player)
+	dsmodule.updateprofile(player.UserId, "IsPromptedIn", false)
+	-- clear any existing leave record
+	task.spawn(function()
+		while task.wait(180) do
+			if player and player.Parent then
+				print("Autosaving for ".. player.Name.."..")
+				local profile = dsmodule.getprofile(player.UserId)
+				dsmodule.SetRaw("Profiles", player.UserId, profile, true)
+				print("Saved!")
+				else break 
+			end
+		end
+	end)
+	if not NOTIFS_ENABLED then return end
+	local payload = HttpService:JSONEncode({ userId = player.UserId })
+	local ok, res = pcall(function()
+		return HttpService:RequestAsync({
+			Url = WORKER_URL .. "/clear-leave",
+			Method = "POST",
+			Headers = {
+				["Content-Type"] = "application/json",
+				["x-internal-key"] = INTERNAL_KEY
+			},
+			Body = payload
+		})
+	end)
+	if not ok then warn("clear-leave failed:", res) else print("clear-leave:", res.StatusCode) end
+end)
+function test(player)
+	local profile = dsmodule.getprofile(player.UserId)
+	print("Profile is: ", profile)
+end
+game.Players.PlayerRemoving:Connect(function(player)
+	local de = dsmodule.DefaultProfile(player)
+	local opted = de["IsPromptedIn"] or false
+	dsmodule.setprofile(player.UserId, de)
+	SaveProfile(player.UserId, de)
+	if not NOTIFS_ENABLED then return end
+	local payload = HttpService:JSONEncode({
+		userId = player.UserId,
+		leave = os.time() * 1000, -- milliseconds
+		optedIn = opted
+	})
+	local ok, res = pcall(function()
+		return HttpService:RequestAsync({
+			Url = WORKER_URL .. "/set-leave",
+			Method = "POST",
+			Headers = {
+				["Content-Type"] = "application/json",
+				["x-internal-key"] = INTERNAL_KEY
+			},
+			Body = payload
+		})
+	end)
+	if not ok then warn("set-leave failed:", res) else print("set-leave:", res.StatusCode) end
+	return
+end)
+
+-- Return profile on request to client
+local returnfunc = game.ReplicatedStorage.Update.RequestProfile
+returnfunc.OnServerInvoke = function (player, extraparams)
+	local profile = dsmodule.getprofile(player.UserId)
+	if not profile then task.wait(2) profile = dsmodule.getprofile(player.UserId) end
+	if extraparams then return profile[extraparams]end
+	return profile
+end
+game.ReplicatedStorage.Update.NoProg.OnServerEvent:Connect(function(player)
+	dontsaveprogs[player.UserId] = not dontsaveprogs[player.UserId]
+end)
