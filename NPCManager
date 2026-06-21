@@ -1,0 +1,92 @@
+local Rep = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
+
+local DialogueModule = require(Rep.Modules.DialogueDefs) 
+local Profiles = require(Rep.DataStoreModule) 
+local GetDialogueFunc = Rep.DoNpcEvent
+
+local function deepCopy(original)
+	local copy = {}
+	for k, v in pairs(original) do
+		if type(v) == "table" then 
+			v = deepCopy(v) 
+		else 
+			copy[k] = v 
+		end
+	end
+	return copy
+end
+
+local function sanitizeForClient(nodeDataCopy)
+	if nodeDataCopy.Choices then
+		for _, choice in pairs(nodeDataCopy.Choices) do
+			choice.Req = nil 
+			choice.Reward = nil
+		end
+	end
+	return nodeDataCopy
+end
+
+GetDialogueFunc.OnServerInvoke = function(player, npcName, choiceIndex)
+	local profile = Profiles.getprofile(player.UserId)
+	local npcDef = DialogueModule.NPCs[npcName]
+	if not npcDef then return {Text = "NPC Definition Missing.", Choices = {{Text="Leave", Type="Leave"}}} end
+	profile["ActiveDialogues"] = profile["ActiveDialogues"] or {}
+	local activeDialogues = profile["ActiveDialogues"]
+	if not activeDialogues[npcName] then
+		activeDialogues[npcName] = npcDef.InitialNode
+	end
+	local currentNodeID = activeDialogues[npcName]
+	local currentNodeData = npcDef.Nodes[currentNodeID]
+	if choiceIndex then
+		if choiceIndex == "leave" then choiceIndex = #currentNodeData.Choices end
+		local selectedChoice = currentNodeData.Choices[choiceIndex]
+		if selectedChoice then
+			if selectedChoice.Req then
+				local passed, failMsg = selectedChoice.Req(player)
+				if not passed then
+					return {
+						Text = failMsg or "You cannot do that yet.",
+						Choices = {{ Text = "I understand" }}
+					}
+				end
+			end
+			-- B. Give Rewards
+			if selectedChoice.Reward then
+				print("Giving Reward...")
+				selectedChoice.Reward(player)
+			end
+            print(selectedChoice.Next)
+			if selectedChoice.Type == "Leave" then
+				if currentNodeID ~= "Ender" then
+				activeDialogues[choiceIndex] = nil end
+				return nil
+			elseif selectedChoice.Type == "Special" then
+				if selectedChoice["Next"] then profile["ActiveDialogues"][npcName] = selectedChoice["Next"] end
+				return {Specialty = selectedChoice.Specialty}
+			elseif selectedChoice.Next then
+				activeDialogues[npcName] = selectedChoice.Next
+				currentNodeID = selectedChoice.Next
+			elseif selectedChoice.Type == "Ender" then
+				profile["EndersClaimed"] = profile["EndersClaimed"] or {}
+				profile["EndersClaimed"][npcName] = true
+				profile["ActiveDialogues"][npcName] = "Ender"
+				return
+			end
+		end
+		elseif profile["EndersClaimed"][npcName] then
+			local ender = npcDef.Nodes.Ender
+			return ender
+	end
+	local nextNodeData = npcDef.Nodes[currentNodeID]
+
+	if not nextNodeData then
+		warn("Node not found: " .. tostring(currentNodeID))
+		return nil
+	end
+	local returnData = table.clone(nextNodeData)
+	if returnData["Format"] then
+       returnData["Text"] = string.format(returnData["Text"], returnData.Format(player))
+	end
+	return returnData
+end
