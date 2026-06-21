@@ -1,0 +1,90 @@
+local TweenService = game:GetService("TweenService")
+local f = require(game.ReplicatedStorage.Modules.Commonfuncs).GetMods()
+task.wait(1)
+local plots = game.CollectionService:GetTagged("plot")
+for _, model in plots do
+local plotnum = tonumber(model.Name:sub(6))
+local label = model:QueryDescendants("TextLabel")[1]
+local function TweenScale(plantmodel, growpercentage, growtime)
+	-- Example: plantmodel, growtime, growpercentage are assumed to be defined above
+	local parts = {}
+	for i, v in plantmodel:GetDescendants() do
+		if v:IsA("MeshPart") then
+			parts[#parts+1] = v
+		end
+	end
+	if #parts == 0 then return end
+
+	local lowestY = parts[1].Position.Y
+	for i, part in parts do
+		if part.Position.Y < lowestY then
+			lowestY = part.Position.Y + 0.012
+		end
+	end
+
+	local originalBaseY = lowestY
+	local originalPivot = plantmodel:GetPivot().Position
+
+	-- Create proxy NumberValue for tweening scale
+	local scaleProxy = Instance.new("NumberValue")
+	scaleProxy.Value = plantmodel:GetScale()
+
+	local tween = TweenService:Create(scaleProxy, TweenInfo.new(growtime), {Value = growpercentage})
+
+	local function updateScale()
+		if scaleProxy.Value > 0 then
+			plantmodel:ScaleTo(scaleProxy.Value)
+			-- Find the lowest Y value after scaling
+			local newLowestY = nil
+			for _, v in plantmodel:GetDescendants() do
+				if v:IsA("MeshPart") then
+					if newLowestY == nil or v.Position.Y < newLowestY then
+						newLowestY = v.Position.Y
+					end
+				end
+			end
+			if newLowestY and originalBaseY then
+				local offsetY = originalBaseY - newLowestY
+				local currentPivot = plantmodel:GetPivot()
+				plantmodel:PivotTo(currentPivot + Vector3.new(0, offsetY, 0))
+			end
+		end end
+
+	scaleProxy:GetPropertyChangedSignal("Value"):Connect(updateScale)
+	tween:Play()
+	task.wait(1)
+	scaleProxy:Destroy()
+end
+
+local debouncer = 1
+task.spawn(function()
+while task.wait(debouncer) do
+	local tags = model.Parent:GetTags() if #tags < 1 then label.Text = "None" debouncer = 1 else
+		local profile = f.Profiles.getprofile(tonumber(tags[1])) if profile then 
+			local plotstats = profile["Plotstats"][plotnum]
+			local growtime = math.max(plotstats["Growfinish"] - os.time(), 0) local pot = profile["Potiontimers"]["Farming Potion"]
+			if pot and pot > os.time() then plotstats["Growfinish"] -= 1 end
+			local plant = plotstats["Currentcrop"]
+			if plant and plant ~= "none" then
+				local plantmodel = model:FindFirstChild(plant) if not plantmodel then
+					plantmodel = game.ServerStorage:FindFirstChild(plant):Clone() plantmodel:PivotTo(model:GetPivot() * CFrame.new(0, -1, 0)) end
+				plantmodel.Parent = model
+				plantmodel.ClickDetector.MaxActivationDistance = (growtime == 0 and 9) or 0
+				local info = f.Info.farming.seeds[plant]
+				local percentage = (1/(info.growtime) * (info.growtime - growtime))
+				local shin = (plotstats["Shiny"] and " (Shiny)") or ""
+			    local shinexist = model.Soil:FindFirstChild("ShinyEffect")
+				if plotstats["Shiny"] then
+					if not shinexist then
+						local effect = Instance.new("Sparkles", model.Soil)
+						effect.SparkleColor = Color3.new(1, 1, 1)
+						effect.TimeScale = 0.4
+						effect.Name = "ShinyEffect"
+					end
+				elseif shinexist then
+					shinexist:Destroy()
+				end
+				label.Text = (growtime == 0 and plant.." Ready"..shin) or f.Math.timeconcatenation(growtime)
+				local scale = model:GetScale()
+				debouncer = 0
+				TweenScale(plantmodel, percentage, 0.8) end else label.Text = "None" debouncer = 1 end end end end) end
