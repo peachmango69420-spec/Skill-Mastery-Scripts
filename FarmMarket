@@ -1,0 +1,81 @@
+local rep = game.ReplicatedStorage
+local f = require(rep.Modules.Commonfuncs).GetMods()
+local farm = f.Info.market.farm
+rep.Market.BuyFarmItem.OnServerInvoke = function(player, itemname)
+	local profile = f.Profiles.getprofile(player.UserId)
+	--profile["FarmMarkets"] = {}
+	profile["FarmMarkets"][itemname] = profile["FarmMarkets"][itemname] or 0
+	local info = farm.seeds[itemname] or farm.animals[itemname] or farm.tools[itemname]
+	local tier = 0
+	for _, level in info.farmlevel do
+		if profile["Farming_Level"] > level  then
+			tier += 1
+		end
+	end
+	if tier == 0 then return false, "Too low level!" end
+	if farm.seeds[itemname] then
+		local max = info.levels[tier]
+		if max <= profile["FarmMarkets"][itemname] then return false, "Not enough in stock!" end
+		local coins = info.coins 
+		if profile["Coins"] < coins then return false, "Too poor!" end
+		f.Profiles.removeitem(player, "Coins", coins)
+		f.Profiles.additem(player, itemname, 1)
+		profile["FarmMarkets"][itemname] += 1
+		return true, "Bought!", profile["FarmMarkets"]
+	elseif farm.animals[itemname] then
+		profile["Animals"] = profile["Animals"] or {}
+		profile["Animals"][itemname] = profile["Animals"][itemname] or {}
+		local seed = Random.new(os.time() // 86400)
+		local seeds = {}
+		for _, animal in farm.animalist do
+			local random = seed:NextNumber()
+			seeds[animal] = random
+		end
+		local seed = seeds[itemname]
+		local chance = info.chance[tier]
+		if chance > (seed * 100) then
+		local item = profile["FarmMarkets"][itemname]
+		if item == info.stock[tier]  then
+			return false, "You bought all the animals!"
+		end
+		local cost = info.coins
+		if cost > profile["Coins"] then return false, "Too Poor!" end
+		local animnum = #profile["Animals"][itemname]
+		if animnum >= info.max then return false, "Too many animals!" end
+		f.Profiles.removeitem(player, "Coins", cost)
+		local gender = (math.random(1, 2) == 1 and "Male") or "Female"
+		local names = (gender == "Male" and f.Info.farming.malenames) or f.Info.farming.femalenames
+		local name = names[math.random(1, #names)]
+		local animinfo = {Birth = os.time(), Name = name, Defects = {}, Level = 1, XP = 0, Gender = gender, Hungry = false}
+		print(animinfo)
+		table.insert(profile["Animals"][itemname], animinfo)
+		profile["FarmMarkets"][itemname] += 1
+		return true, "Successfully bought a "..gender.." "..itemname.." named ".. name.."!", profile["FarmMarkets"]
+		else return false, "No "..itemname.." available to buy today!"
+		end
+	elseif farm.tools[itemname] then
+		local seed = Random.new(os.time()//86400)
+		for _, tools in farm.toolist do if tools ~= itemname then seed:NextNumber() else break end end
+		local min,max = info.min[tier],info.max[tier]
+		local amount = seed:NextInteger(min, max)
+		if amount == 0 then return false, "No "..itemname.." available to buy today!" end
+		local remaining = amount - profile["FarmMarkets"][itemname]
+		if remaining <= 0 then return false, "No "..itemname.." left!" end
+		local cost = info.coins[tier]
+		if cost > (profile["Coins"] or 0) then return false, "Too Poor!" end
+		f.Profiles.removeitem(player, "Coins", cost)
+		f.Profiles.additem(player, itemname, 1)
+		profile["FarmMarkets"][itemname] += 1
+		return true, "Successfully bought "..itemname.."!", profile["FarmMarkets"]
+	end
+	return false, "No info"
+end
+task.wait(86400 - (os.time() % 86400))
+for _, player in game.Players:GetPlayers() do
+	f.Profiles.getprofile(player)["FarmMarkets"] = {}
+end
+while task.wait(86400) do
+	for _, player in game.Players:GetPlayers() do
+		f.Profiles.getprofile(player)["FarmMarkets"] = {}
+	end
+end
