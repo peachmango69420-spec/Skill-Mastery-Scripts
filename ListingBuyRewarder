@@ -1,0 +1,40 @@
+local rep = game.ReplicatedStorage
+local profiles = require(game.ReplicatedStorage.DataStoreModule)
+local dss = game:GetService("DataStoreService")
+local event = rep.Market.BuyListedItemRequest
+local listingstore = dss:GetDataStore("Listings")
+event.OnServerInvoke = function(player, amount, listid)
+	local profile = profiles.getprofile(player.UserId)
+	local backpack = player.Backpack
+	local startgear = player.StarterGear
+	local sucess, listing = pcall(function()return listingstore:GetAsync(listid) end)
+	if sucess and not listing then return false, "Item already snatched! Better luck next time!" 
+		elseif not sucess then return false, "Failed to get item!"
+	end
+	if sucess and listing then
+		local count = listing.Amountleft
+		local item = listing.Item
+		local price = listing.Price
+		local seller = listing.SellerID
+		if seller == player.UserId then return false, "You can't buy your own item!" end
+		local unclaimed = listing.Unclaimedcoins
+		local pubtime = listing.Publishedtime
+		local totalprice = price * amount
+		-- if tonumber(seller) == tonumber(player.UserId) then return false, "Can't buy your own item!" end 
+		if totalprice > (profile["Coins"] or 0) then return false, "You're too poor!" end
+		if amount > count then return false, "There aren't enough left in stock!" end
+		if (os.time() - pubtime) > (86400*3) then return false, "Item expired!" end
+		-- Now the player is free to buy, now returns logic.
+		local success, f = pcall(function()
+			return listingstore:UpdateAsync(listid, function(old)
+				local old = old or {}
+				old["Amountleft"] -= amount
+				old["Unclaimedcoins"] += totalprice
+				return old
+			end)
+		end)
+		if success then profiles.additem(player, item, amount) profiles.removeitem(player, "Coins", totalprice) end
+		return true, "Sucessfully bought item!"
+	end
+	return false, "Error"
+end
