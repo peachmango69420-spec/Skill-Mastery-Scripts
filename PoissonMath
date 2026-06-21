@@ -1,0 +1,50 @@
+-- Server helper functions (can be placed in a ModuleScript)
+local PoissonHelpers = {}
+
+-- Returns integer >= 0
+function PoissonHelpers.samplePoisson(rnd, lambda)
+	if lambda <= 0 then return 0 end
+	-- For small lambda, Knuth is fine
+	local rnd = rnd or Random.new(os.time())
+	local L = math.exp(-lambda)
+	local k = 0
+	local p = 1
+	while true do
+		k = k + 1
+		p = p * rnd:NextNumber() -- uniform (0,1]
+		if p <= L then break end
+		-- Safety: cap iterations in case of weirdness; though not normally needed
+		if k > (lambda * 10 + 1000) then
+			break
+		end
+	end
+	return k - 1
+end
+
+-- Zero-inflated Poisson: first a Bernoulli to decide whether item is present
+function PoissonHelpers.sampleZeroInflatedPoisson(rnd, lambda, zeroInflationProb)
+	if zeroInflationProb and rnd:NextNumber() < zeroInflationProb then
+		return 0
+	end
+	return PoissonHelpers.samplePoisson(rnd, lambda)
+end
+
+-- Generate stock for a whole item table (items: ItemDefs.Items)
+-- options: {seed = number or nil, caps = true/false}
+function PoissonHelpers.generateStockForItems(items, seedNum)
+	local rnd = Random.new(seedNum)
+	local stock = {}
+	for name, def in pairs(items) do
+		-- sample with zero-inflation
+		local lambda = def["lamda"] or ((def["min"] + def["max"])/2)
+		local zi = def["zeroInflation"] or 0
+		local count = PoissonHelpers.sampleZeroInflatedPoisson(rnd, lambda, zi)
+		-- enforce caps and min
+		if count > 0 then
+		if def["min"] and def["max"] then count = math.clamp(count, def.min, def.max) end
+		stock[name] = count end
+	end
+	return stock
+end
+
+return PoissonHelpers
