@@ -1,0 +1,243 @@
+local dss = game:GetService("DataStoreService")
+local badges = game:GetService("BadgeService")
+local gameinf = require(game.ReplicatedStorage.GameStatsInfo)
+local mat = require(game.ReplicatedStorage.Mathematics)
+local storetables = {
+	"Usedcodes", "Badges", "Listings", "Sigils", "Kills","EndersClaimed","CurrentStockLeft","NPCProgs","OfflineGains","Playlist", "Achievs","Achievprogs","Achievsets",
+	"Potiontimers", "Plotstats", "FarmMarkets", "AnimalFood"
+}
+local PLOT_Nums = 4
+local function withRetries(fn, maxAttempts)
+	local delay = 0.5
+	for attempt = 1, maxAttempts do
+		local ok, resultOrErr = pcall(fn)
+		if ok then
+			return true, resultOrErr
+		end
+		task.wait(delay + math.random() * 0.2)
+		delay = math.min(delay * 2, 4)
+	end
+	return false, "failed after retries"
+end
+local profiles = {}
+local DataStoreWrapper = {}
+function DataStoreWrapper.Deserialize(profile) 
+		local raw = {}
+		for key, value in pairs(profile) do
+			if key ~= "schemaVersion" then
+			raw[key] = value end
+		if type(value) == "userdata" then
+			print("Userdata! " , key)
+			raw[key] = value.Name
+		end
+		end
+		raw["dirty"] = false
+		raw["lastonline"] = os.time()
+		raw["OfflineGains"] = {
+			["Stone"] = {rate = 0.01, mult = 1}
+		}
+		return raw
+	end
+function DataStoreWrapper.Serialize(profile) 
+		local raw = {}
+		for key, value in pairs(profile) do
+			raw[key] = value
+		end
+		raw["dirty"] = true
+		raw["schemaVersion"] = profile.schemaVersion
+		return raw
+	end 
+function DataStoreWrapper.GetRaw(storeName, key)
+		local currentstore = dss:GetDataStore(storeName)
+		local ok, value = withRetries(function() return currentstore:GetAsync(key) end, 3)
+		if not ok then return nil, value end
+		--value["ActiveDialogues"] = {}
+		--value["EndersClaimed"] = {}
+		return value
+	end
+function DataStoreWrapper.SetRaw(storeName, key, value, dirty)
+		local currentstore = dss:GetDataStore(storeName)
+		local ok, err = withRetries(function() return currentstore:SetAsync(key,value) end, 3)
+		if ok then print("Successfully saved!") else print("Failed to save! Error: ", err) end
+	if not dirty then profiles[key] = nil end
+		return ok, err
+	end
+function DataStoreWrapper.DefaultProfile(player)
+		local descendants = player:GetDescendants()
+		local default = profiles[player.UserId] or {}
+		local toolcountz = {}
+		for _, child in descendants do
+			if string.find((child.ClassName), "Value") then
+				default[child.Name] = child.Value
+		end 
+		default["Playlist"] = default["Playlist"] or require(game.ReplicatedStorage.Modules.DesignInfo).defaultmusic
+		for _, name in ipairs(storetables) do
+		default[name] = default[name] or {}
+		end
+		local plot = game.CollectionService:GetTagged(player.UserId)[1]
+		for i = 1, PLOT_Nums do
+			default["Plotstats"][i] = default["Plotstats"][i] or {Growfinish = 0, Currentcrop = "none", Shiny = false, Growing = false}
+		end
+		print("Profile now: ",default)
+		return default
+	end end
+function DataStoreWrapper.setprofile(name, arg)
+		profiles[name] = arg
+	end
+function DataStoreWrapper.updateprofile(userkey, key1, newval, key2)
+		local profile = profiles[userkey]
+		if profile and not profile[key1] then 
+			profiles[userkey][key1] = newval return end
+		if key2 and profile[key1] and not profile[key1][key2] then profiles[userkey][key1][key2] = newval return
+		elseif key2 and profile[key1] then
+			if type(newval) == "number" then
+				profiles[userkey][key1][key2] += newval
+			elseif type(newval) == "table" then
+				profiles[userkey][key1][key2] = newval
+			elseif newval == nil then
+				profiles[userkey][key1][key2] = nil
+			end
+			return end
+		if type(newval) == "number" and type(profile[key1]) == "number" then profiles[userkey][key1] += newval
+		elseif type(newval) == "table" then profiles[userkey][key1] = newval
+		elseif type(newval) == "boolean" or type(newval) == "string" then profiles[userkey][key1] = newval
+		end
+		return
+	end
+function DataStoreWrapper.getprofile(key)
+		return profiles[key]
+	end
+function DataStoreWrapper.additem(player, itemname, amount, tabletolookinto)
+	local pack = player.Backpack
+	local start = player.StarterGear
+	local profile = profiles[player.UserId]
+	local stats = player.stats
+	local leaderstats = player.leaderstats
+	local statsitem = stats:FindFirstChild(itemname) or leaderstats:FindFirstChild(itemname)
+	local proftable = profile[tabletolookinto] or {}
+	local profileitem = profile[itemname] or proftable[itemname]
+	local backtool = game.ServerStorage.Tools:FindFirstChild(itemname) --player.Backpack:FindFirstChild(itemname)
+	local querytag = '[$ToolName = "'..itemname..'"]'
+	local packtool = pack:QueryDescendants(querytag)[1] or player.Character:FindFirstChildWhichIsA("Tool")
+	if packtool and packtool:GetAttribute("ToolName") ~= itemname then packtool = nil end
+	local startool = start:QueryDescendants(querytag)[1]
+	if statsitem then statsitem.Value += amount end 
+	if profileitem and backtool then 
+		if packtool and startool then
+			local newamount = packtool:GetAttribute("Amount") + amount
+			packtool:SetAttribute("Amount", newamount) packtool.Name = itemname .. " x " .. newamount
+			startool:SetAttribute("Amount", newamount) startool.Name = itemname .. " x " .. newamount
+		else local tool = backtool:Clone() tool:SetAttribute("Amount", amount)
+			tool.Name = itemname .. " x " .. amount tool.Parent = pack tool:Clone().Parent = start
+		end	end
+    if profileitem then profile[itemname] += amount return
+    else profile[itemname] = amount
+	end end
+function DataStoreWrapper.removeitem(player, itemname, amount, tabletolookinto)
+		local profile = profiles[player.UserId]
+		local stats = player.stats
+		local leaderstats = player.leaderstats
+		local statsitem = stats:FindFirstChild(itemname) or leaderstats:FindFirstChild(itemname)
+		local proftable = profile[tabletolookinto]
+		local profileitem = profile[itemname] or proftable[itemname]
+		local tool = game.ServerStorage.Tools:FindFirstChild(itemname)
+		local querytag = '[$ToolName = "'..itemname..'"]'
+		local packtool = player.Backpack:QueryDescendants(querytag)[1] or player.Character:FindFirstChildWhichIsA("Tool")
+		if packtool and packtool:GetAttribute("ToolName") ~= itemname then packtool = nil end
+	    local startool = player.StarterGear:QueryDescendants(querytag)[1]
+		if statsitem then statsitem.Value -= amount end
+		if profileitem and tool and packtool then
+		local newamount = packtool:GetAttribute("Amount") - amount print(newamount) print(newamount)
+		if newamount >= 1 then packtool:SetAttribute("Amount", newamount) packtool.Name = itemname .. " x " .. newamount
+		startool:SetAttribute("Amount", newamount) startool.Name = itemname .. " x " .. newamount
+		else startool:Destroy() packtool:Destroy() profile[itemname] = 0 return end end
+		if profileitem then profile[itemname] -= amount return 	
+		end
+	end
+function DataStoreWrapper.awardBadge(player, badgeid)
+		local profile = profiles[player.UserId]
+		local badges = profile["Badges"]
+		if badges[badgeid] then return end
+	end
+function DataStoreWrapper.awardAchievement(player:Player, achievementinfo)
+		local profile = profiles[player.UserId]
+		local catname = achievementinfo["Skill"] or "None"
+		local diff = achievementinfo["Diff"] or "easy"
+		local index = tonumber(achievementinfo["Index"] or 1) or 1
+		local achieve = gameinf.achievements[catname][diff][index]
+		if not profile["Achievs"][catname] then profile["Achievs"][catname] = {easy = {}, medium = {}, hard = {}} end
+		local profexist = profile["Achievs"][catname][diff][index]
+		if not profexist then
+		profile["Achievs"][catname][diff][index] = true
+			game.ReplicatedStorage.Update.NotifyAchiev:FireClient(player, {Cat = catname, Diff = diff, Index = index}) 
+			print("Got achievement!", profile, catname, diff, index)
+		local allAchieves = true
+		for i = 1, #gameinf.achievements[catname][diff] do
+			if not profile["Achievs"][catname][diff][i] then
+				allAchieves = false
+			end
+		end	
+		if allAchieves then
+			print(player.Name,"Has completed the",catname,diff,"Set!")
+			if not profile["Achievsets"][catname] then profile["Achievsets"][catname] = {} end
+			profile["Achievsets"][catname][diff] = true
+		end
+		end
+	end
+function DataStoreWrapper.progAchieve(player, achinfo, amount)
+		local profile = profiles[player.UserId]
+		local cat = achinfo["Cat"]
+		local diff = achinfo["Diff"]
+		local ind = achinfo["Index"]
+		local info = gameinf.achievements[cat][diff][ind]
+		local progress = profile["Achievprogs"][info.goal]
+        profile["Achievprogs"][info.goal] = ((progress or 0) + amount) or 0
+	    if profile["Achievprogs"][info.goal] >= info.goalnum then 
+			DataStoreWrapper.awardAchievement(player, {Skill = cat, Diff = diff, Index = ind})
+		end
+	end
+function DataStoreWrapper.giveXP(player, skillname, amount)
+	local mult = mat.xpmultcalc(player, amount)
+	local profile = profiles[player.UserId]
+	profile[skillname.."_XP"] += mult
+	player.SkillXP:FindFirstChild(skillname.."_XP").Value += mult
+	local newlevel = mat.levelcalc(player, skillname, profile[skillname .. "_XP"])[1]
+	profile[skillname.."_Level"] = newlevel
+end
+function DataStoreWrapper.harvestcrop(plr, number, crop, model)
+	local profile = profiles[plr.UserId]
+	local plotstats = profile["Plotstats"][number]
+	local plot = model.Parent
+	local sparkles = plot.Soil:FindFirstChildWhichIsA("Sparkles")
+	local info = gameinf.farming.seeds[crop or "Mushroom"]
+	local minharvest = info.minharvest
+	local maxharvest = info.maxharvest
+	local xpreward = info.xpreward
+	local mult = plotstats["Shiny"] and 10 or 1
+	local tags = plot.Parent:GetTags()
+	if tags[1] == tostring(plr.UserId) then
+		local harvestcount = math.random(minharvest * mult, maxharvest * mult)
+		profile[crop.."s"] = (profile[crop.."s"] or 0) + harvestcount
+		DataStoreWrapper.giveXP(plr, "Farming", xpreward)
+		plotstats["Currentcrop"] = "none"
+		plotstats["Growing"] = false
+		plotstats["Shiny"] = false
+		plot.GuiPart.BillboardGui.Label.Text = "None"
+		local loot = game.ReplicatedStorage.UiStuff.Loot:Clone()
+		local ui = plot.GuiPart.BillboardGui
+		loot.Parent = ui
+		ui.Label.Visible = false
+		ui.StudsOffset = Vector3.new(0, -3, 0)
+		game.Debris:AddItem(loot, 1.2)
+		loot.Text = "+"..harvestcount .. " " .. crop
+		game.TweenService:Create(ui, TweenInfo.new(1.2), {StudsOffset = Vector3.new(0, 1, 0)}):Play()
+		model:Destroy()
+		task.wait(0.7)
+		game.TweenService:Create(loot, TweenInfo.new(0.5), {TextTransparency = 1}):Play()
+		task.wait(0.5)
+		ui.Label.Visible = true
+		ui.StudsOffset = Vector3.new(0, 0, 0)
+		if sparkles then sparkles:Destroy() end
+	end
+end
+return DataStoreWrapper
