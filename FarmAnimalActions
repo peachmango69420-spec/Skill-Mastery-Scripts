@@ -1,0 +1,52 @@
+local rep = game.ReplicatedStorage
+local f = require(game.ReplicatedStorage.Modules.Commonfuncs).GetMods()
+local farminfo = f.Info.farming
+local farming = rep.Farming
+farming.KillAnimal.OnServerEvent:Connect(function(player, animalname, index)
+	local profile = f.Profiles.getprofile(player.UserId)
+	local animal = profile["Animals"][animalname][index]
+	if not animal then print("No animal?") return end
+	local level = animal.Level or 1
+	local xp = (level * (level + 1))/2 * farminfo.Animals[animalname].KillXP
+	f.Profiles.giveXP(player, "Farming", xp)
+	local loot = farminfo.Animals[animalname].Loot
+	local lootstring = ""
+	for loot, amt in farminfo.Animals[animalname].Loot do
+		f.Profiles.additem(player, loot, amt)
+		lootstring ..= amt.." "..loot..", "
+	end if #lootstring > 0 then lootstring = lootstring.sub(lootstring, 0, #lootstring - 2) else lootstring = "None" end
+	rep.Update.PopUp:FireClient(player, "You killed "..animal.Name .. " the "..animalname.." and got "..xp.."XP!", true, true)
+	task.wait(0.4)
+	rep.Update.PopUp:FireClient(player, "Loot: ".. lootstring, true, true)
+	profile["Animals"][animalname][index] = nil
+end)
+farming.AddFood.OnServerEvent:Connect(function(player, animal, foodtype, amount)
+	local profile = f.Profiles.getprofile(player.UserId)
+	local multi = farminfo.Food[farminfo.Animals[animal].Foodtype][foodtype]
+	if not multi then print("No info!") return end
+	if (profile[foodtype] or 0) < amount then print("Not enough!") return end
+	profile["AnimalFood"] = profile["AnimalFood"] or {}
+	profile["AnimalFood"][animal] = profile["AnimalFood"][animal] or 0
+	profile["AnimalFood"][animal] += (amount * multi)
+	f.Profiles.removeitem(player, foodtype, amount)
+end)
+farming.AnimalAction.OnServerEvent:Connect(function(player, animal)
+	local action = farminfo.Animals[animal]["Action"]
+	if action then local result, positive = action(player, f.Profiles.getprofile(player.UserId))
+	if result then rep.Update.PopUp:FireClient(player, result, not not positive) end
+	end
+end)
+farming.GroomAnimal.OnServerEvent:Connect(function(player, animaltype, i, isRepresented)
+	local profile = f.Profiles.getprofile(player.UserId)
+	local animal = profile["Animals"][animaltype][i]
+	if not animal then print("No animal?") return end
+	local isgroomed = profile["Animals"][animaltype][i]["IsGroomed"]
+	if isgroomed then print("No XP given.") return end
+	local age = (os.time() - animal["Birth"])//86400
+	local level = animal.Level or 1
+	local xp = 5 * math.ceil(age / 10) 
+	if isRepresented then print("Represented!") return end
+	profile["Animals"][animaltype][i]["IsGroomed"] = true
+	animal["XP"] = (animal["XP"] or 0) + xp
+	animal["Level"] = f.Math.levelcalc(player, "Farming", animal.XP)[1] print("Groomed!")
+end)
