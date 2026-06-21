@@ -1,0 +1,217 @@
+local rep = game.ReplicatedStorage
+local f = require(script.Parent.Commonfuncs).GetMods()
+local DialogueDefs = {}
+
+-- Helper to safely get player stats
+local function getStat(player, statName)
+	-- Adjust this path to match your actual leaderstats/data structure
+	return f.Profiles.getprofile(player.UserId)[statName]
+end
+
+DialogueDefs.NPCs = {
+	["Blacksmith Pebbles"] = {
+		InitialNode = "Greeting", -- Where we start if we have no memory
+
+		Nodes = {
+			-- NODE 1: The Greeting
+			["Greeting"] = {
+				Text = "Hello! I am Pebbles the Blacksmith.",
+				Choices = {
+					{ Text = "How are you?", Next = "MiningInfo" },
+					{ Text = "What's it like being a Blacksmith?", Next = "Chatter"},
+					{ Text = "Goodbye.", Type = "Leave" },
+				},
+			},
+			
+			["Chatter"] = {
+				Text = "I just use my anvil to craft cool items. It's my hobby, but I don't do it for free.",
+				Choices = {
+					{Text = "Alright then. How's it going?", Next = "MiningInfo"},
+					{Text = "Ok then.", Next = "Greeting", Type = "Leave"},
+				},
+			},
+			["MiningInfo"] = {
+				Text = "I'm doing well! I just need more materials for my forge. Mining is hard work. I'll buy it off of you.",
+				Choices = {
+					{ Text = "I can help.", Next = "IntroduceStone" },
+					{ Text = "No thanks. Not interested in favors.", Type = "Leave" }
+				}
+			},
+			["IntroduceStone"] = {
+				Text = "Great! You can mine stone by equipping a pick near the Infinity Stone. It has Infinite Stone, but you gotta put in the labor of swinging your pick. I'll need 100 of that.",
+				Choices = {
+					{ Text = "Great! I'll try to mine some for you.", Next = "CheckStone", Type = "Special", Specialty = "GetPick",
+						Reward = function(player)
+						f.Profiles.getprofile(player.UserId)["Achievprogs"]["Pick"] = true
+						end,
+					},
+					{ Text = "Sounds tough. Bye.", Type = "Leave" }
+				}
+			},
+			["CheckStone"] = {
+				Text = "Do you have the 100 Stone I request?",
+				Choices = {
+					{ 
+						Text = "Here it is! (Give 100 Stone)", 
+						Type = "Action",
+						Req = function(player)
+							local stone = getStat(player, "Stone")
+							return stone >= 100, "You don't have enough stone!"
+						end,
+						Reward = function(player)
+							f.Profiles.removeitem(player, "Stone", 100)
+							f.Profiles.additem(player, "Coins", 200)
+							return true -- Success
+						end,
+						Next = "Success" -- Where to go if successful
+					},
+					{ Text = "Not yet.", Type = "Leave" }
+				}
+			},
+			["Success"] = {
+				Text = "Thank you so much! Here are 200 coins. Now that you have coins, you can hire me to upgrade your tools. I can upgrade your pickaxe if you want! Just read my anvil for resource requirements and wage.",
+				Choices = {
+					{ Text = "You're welcome! And that's nice!", Type = "Ender" }}},
+			["Ender"] = {
+				Text = "How's it going?",
+				Choices = {{Text = "Good!", Type = "Leave"}}
+			}
+		},
+	},
+	["BusinessMan"] = {
+		InitialNode = "Greeting", -- Where we start if we have no memory
+
+		Nodes = {
+			-- NODE 1: The Greeting
+			["Greeting"] = {
+				Text = "Hello! I am a businessman. May I do business with you?",
+				Choices = {
+					{ Text = "Yeah, that would sound helpful!", Next = "BusyInfo" },
+					{ Text = "No", Type = "Leave" }, -- Shortcut option
+				}
+			},
+
+			-- NODE 2: Information
+			["BusyInfo"] = {
+				Text = "Great! I own and operate a marketplace where you can buy and sell things for coins. I'll need a 500 coins entry though.",
+				Choices = {
+					{ Text = "No problem. Where do I get coins, though?.", Next = "Sell" },
+					{ Text = "No thanks. Bye.", Type = "Leave" }
+				}
+			},
+
+			-- NODE 3: The Requirement Check
+			["Sell"] = {
+				Text = "Ah! So I'll allow you to sell items like stone to me. Let me know when you have 500 coins!",
+				Choices = {
+					{Text = "Open Shop", Type = "Special", Specialty = "OpenFake"},
+					{   Text = "Here's my coins! (Give 500 Coins)", 
+						Type = "Action",
+						Req = function(player)
+							local coins = getStat(player, "Coins")
+							return coins >= 500, "Sell more items to me!"
+						end,
+						Reward = function(player)
+							f.Profiles.removeitem(player, "Coins", 500)
+							return true -- Success
+						end,
+						Next = "Success" -- Where to go if successful
+					},
+					{ Text = "Not yet.", Type = "Leave" }
+				}
+			},
+			["Success"] = {
+				Text = "Glad doing business with you! Now, you are able to trade items for coins with other players on the market. I will also sell you random items I find every so often.",
+				Choices = {
+					{ Text = "Great!", Type = "Ender" }}},
+			["Ender"] = {
+				Text = "Want to do business?",
+				Choices = {{Text = "Yes", Type = "Special", Specialty = "OpenShop"}, {Text = "No", Type = "Leave"}}
+			}
+		},
+	},
+	["Farmer"] = {
+		InitialNode = "Greeting", -- Where we start if we have no memory
+
+		Nodes = {
+			-- NODE 1: The Greeting
+			["Greeting"] = {
+				Text = "Hey, How it doin' young lad?",
+				Choices = {
+					{ Text = "Good! Need any help?", Next = "FarmInfo" },
+					{ Text = "I'm fine. Have a good day!", Type = "Leave" }, -- Shortcut option
+				}
+			},
+
+			-- NODE 2: Information
+			["FarmInfo"] = {
+				Text = "Well howdy! I am a farmer, and it's a hard-working life. I have loads of real estate, but not enough time to take care of animals! Nobody is buying, though..",
+				Choices = {
+					{ Text = "Oh. Well can I be a farmer then?", Next = "Task" },
+					{ Text = "Well I'll probably end up like you..", Next = "Reconsider"},
+					{ Text = "Shucks.", Type = "Leave" }
+				}
+			},
+			["Reconsider"] = {
+				Text = "Are ya sure? You seem like a diligent lad, why not give it a try?",
+				Choices = {
+					{Text = "Fine. But what do I have to do?", Next = "Task"},
+					{Text = "Well.. No, I'll pass.", Type = "Leave"},
+				}
+			},
+			-- NODE 3: The Requirement Check
+			["Task"] = {
+				Text = "Glad yere interested! Every day, you need to feed, groom and make sure the animals are safe. The animals are very useful for labor, though.",
+				Choices = {
+					{Text = "Ok! I'm up for the challenge. What do I need to do?", Next = "NoChallenge"},
+					{Text = "Alright. I think I'm ready.", Next = "Challenge"},
+					{Text = "Ok, let me think about it.", Type = "Leave"}
+				}
+			},
+			["NoChallenge"] = {
+				Text = "This ain't a challenge, boy! This is a lifestyle!",
+				Choices = {{Text = "Ok, I'm sorry.", Next = "NoApologies"}},
+			},
+			["NoApologies"] = {
+				Text = "No need to apologize. Anyways, where was I?",
+				Choices = {
+					{Text = "You were talking about what I need to do for the animals.", Next = "Challenge"}
+				}
+			},
+			["Challenge"] = {
+				Text = "Ok. You need to groom this chicken using less than ten precious seconds! You can't be a slacker if you want to adapt to this lifestyle.",
+				Choices = {
+					{ Text = "Ok, Bring it on!", Type = "Special", Specialty = "ChickenChallenge"}}},
+			["Fail"] = {
+				Text = "Well, seems like ya ain't ready. Maybe once ya grow up, you can try again!",
+				Choices = {{Text = "Trust me, I'm ready,", Next = "Challenge"}, {Text = "Ok.", Type = "Leave"}}
+			},
+			["Ender"] = {
+				Text = "Howdy! Want to buy?",
+				Choices = {{Text = "Yes", Type = "Special", Specialty = "OpenFarm"}, {Text = "No", Type = "Leave"}}
+			}
+		},
+	},
+	["Tutorial"] = {
+		InitialNode = "Introduce",
+	Nodes = {
+		Introduce = {
+			Text = "Hello, %s! Welcome to Skill Mastery! I'm so excited to have a new villager!",
+			Format = function(player)
+				return player.Name
+			end,
+			Choices = {{Text = "Hello! Can you show me around?", Next = "Present"}},
+		},
+		Present = {
+			Text = "My name is boomerclue28. I have founded this village. Let me show you around!",
+			Choices = {{Text = "Ok!"}},
+		}
+	  }
+	}
+}
+
+function DialogueDefs.getNPC(name)
+	return DialogueDefs.NPCs[name]
+end
+
+return DialogueDefs
