@@ -1,0 +1,31 @@
+local event = game.ReplicatedStorage.Farming.Plantseed
+local collectionservice = game.CollectionService
+local f = require(game.ReplicatedStorage.Modules.Commonfuncs).GetMods()
+event.OnServerEvent:Connect(function(player, plantname, patchnum)
+	local profile = f.Profiles.getprofile(player.UserId)
+	local plot = collectionservice:GetTagged(player.UserId)[1]
+	local patch = plot:FindFirstChild("Patch"..patchnum)
+	local plotstats = profile["Plotstats"][patchnum]
+	local character = player.Character
+	local seed = profile[plantname .. " Seed"]
+	local plantype = plotstats["Currentcrop"]
+	local hasachiev = profile["Achievsets"]["Farming"] or {}
+	if plotstats["Growing"] == false and seed >= 1 then
+		local shinychance = math.random(1, 100)
+		plotstats["Growing"] = true
+		plotstats["Currentcrop"] = plantname
+		plotstats["Growfinish"] = os.time() + f.Info.farming.seeds[plantname].growtime
+		profile["Achievprogs"]["Lastplanted"] = os.time()
+		local gotshiny = shinychance == 100
+		if hasachiev["easy"] then gotshiny = gotshiny or shinychance == 99 end
+		if shinychance == 100 then plotstats["Shiny"] = true
+			f.Profiles.awardAchievement(player, {Skill = "Farming", Diff = "medium", Index = 2})
+			local shinysparkles = Instance.new("Sparkles")
+			shinysparkles.Parent = plot.Soil
+			shinysparkles.Name = "Shiny Sparkles" 
+			shinysparkles.SparkleColor = Color3.new(0.901961, 1, 0.27451)
+			shinysparkles.TimeScale = 0.6
+		end
+		f.Profiles.removeitem(player, plantname .. " Seed", 1)
+	end
+end)
