@@ -1,0 +1,150 @@
+local sounds = game.SoundService
+local winsfx = sounds.Good
+local rep = game.ReplicatedStorage
+local punchanim = rep.PunchAnim
+local swinganim = rep.SwingAnim
+local profiles = require(rep.DataStoreModule)
+local invoke = rep.Update.IgnitiateFight
+local info = require(rep.GameStatsInfo)
+local enemstats = info.fighting.enemystats
+local mathmod = require(rep.Mathematics)
+local dmgboard = game.ServerStorage.DamageGui
+local indexedares = {
+	["Fields"] = {
+		[1] = "Rat",
+		[2] = "Chicken",
+		[3] = "Lizard",
+		[4] = "Rabbit",
+		[5] = "Bee",
+	}
+}
+local function reward(player: Player, enemy: string)
+	local profile = profiles.getprofile(player.UserId)
+	profile["Kills"] = profile["Kills"] or {}
+	profile["Kills"][enemy] = (profile["Kills"][enemy] or 0) + 1
+	local mult = 1
+	local hasach = profile["Achievsets"]["Fighting"] or {}
+	if hasach["medium"] then local coinflip = math.random(1,2) if coinflip == 2 then mult *= 2 end end
+	local gotall = true
+	for name, _ in info.fighting.enemystats.Fields do
+		if not profile["Kills"][name] then gotall = false end
+	end
+	if gotall then profiles.awardAchievement(player, {Skill = "Fighting", Diff = "easy", Index = 1}) end
+	local rewardsinfo = info.fighting.enemyrewards[enemy]
+	local xpforenemy = info.fighting.enemyxpbonus[enemy]
+	local rewards = {}
+	for i, rewardtable in ipairs(rewardsinfo) do
+		local chance = (math.random() <= rewardtable.chance)
+		if chance then 
+			local totalamount = math.random(rewardtable.min, rewardtable.max)
+			rewards[rewardtable.reward] = totalamount
+			profiles.updateprofile(player.UserId, rewardtable.reward, totalamount)
+		end
+	end
+	if rewards["Cheese"]  then profiles.progAchieve(player, {Cat = "Fighting", Diff = "easy", Index = 2}, rewards["Cheese"])
+	elseif rewards["Bones"] then profiles.progAchieve(player, {Cat = "Fighting", Diff = "medium", Index = 1}, rewards["Bones"])
+	elseif rewards["Feathers"] then profiles.progAchieve(player, {Cat = "Fighting", Diff = "medium", Index = 3}, rewards["Feathers"])
+	end
+	if enemy == "Wasp" and profile["CurrentSword"] and profile["CurrentSword"] == 0 then
+		profiles.awardAchievement(player, {Skill = "Fighting", Diff = "medium", Index = 2})
+	end
+	if rewards["Wasp Wings"] then
+		profiles.awardAchievement(player, {Skill = "Fighting", Diff = "easy", Index = 3})
+	end
+	profiles.giveXP(player, "Fighting", xpforenemy)
+	rewards["Fighting XP"] = xpforenemy
+	rep.Update.Rewards:FireClient(player, rewards, enemy)
+	player.Character:PivotTo(workspace.Trainer:GetPivot())
+	player.Character:PivotTo(player.Character:GetPivot()*CFrame.new(2,0,0))
+end
+local dodamage = function(player, weaponinfo, enemy, field)
+	local enemstats = info.fighting.enemystats[field][enemy]
+	local humanoid = player.Character and player.Character.Humanoid
+	local animation = player.Character.Humanoid.Animator:LoadAnimation(punchanim)
+	local physicalenemy = game.ServerStorage.Enemies:WaitForChild(enemy):Clone()
+	physicalenemy.Parent = workspace
+	physicalenemy:MoveTo(workspace.PlayerPos.Position + Vector3.new(1, -2, -5))
+	physicalenemy.Humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	physicalenemy.Humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+	physicalenemy.Humanoid.MaxHealth = enemstats.health
+	physicalenemy.Humanoid.Health = enemstats.health
+	humanoid.WalkSpeed = 0
+	humanoid.JumpHeight = 0
+	local swinganim = physicalenemy.Humanoid.Animator:LoadAnimation(swinganim)
+	local damage = weaponinfo.damage
+	local hb = game.ServerStorage:FindFirstChild("HealthBoard")
+	if hb then hb.Parent = player.Character.Head end
+	local speed = weaponinfo.speed
+	local PLAYER_SPEED = 2/speed
+	local acc = weaponinfo.accuracy
+	local ENEMY_SPEED = 2/enemstats.speed
+	task.spawn(function()
+	while true do
+	task.wait(ENEMY_SPEED)
+		local humanoid = player.Character and player.Character.Humanoid
+	local pro = profiles.getprofile(player.UserId)
+	local DMG = math.random(0, enemstats.attack)
+			local HIT_CHANCE = enemstats.accuracy
+			local hitamount = math.random(1, 100)
+			local didhit = (hitamount <= HIT_CHANCE)
+			if not didhit then print("Dodged!", hitamount) DMG = 0 end
+	if not humanoid or pro["CurrentEnemy"] ~= enemy or pro["Fighting"] == false then break end
+			if DMG >= humanoid.Health then humanoid.Health = 0 physicalenemy:Destroy() break end 
+if DMG > 0 then swinganim:Play() task.wait(0.3)
+	local db=dmgboard:Clone() db.Damage.Text = "-"..DMG db.ExtentsOffset = Vector3.new(math.random()/2,0.5,math.random()-0.5) db.Parent = player.Character
+	humanoid:TakeDamage(DMG) end
+	end end)
+	task.spawn(function()
+		while true do
+			task.wait(PLAYER_SPEED)
+			local HIT_CHANCE = acc / enemstats.evasion
+			local hitamount = math.random(1, 100)
+			local didhit = (hitamount <= HIT_CHANCE)
+			local humanoid = player.Character and player.Character.Humanoid
+			local pro = profiles.getprofile(player.UserId)
+			local DMG = math.ceil(math.random(0, weaponinfo.damage) / enemstats.defense)
+			if not didhit then DMG = 0 end
+			if not humanoid or pro["CurrentEnemy"] ~= enemy or pro["Fighting"] == false then break end
+			if DMG > 0 then animation:Play() task.wait(0.5)
+local db=dmgboard:Clone() db.Damage.Text = "-"..DMG db.ExtentsOffset = Vector3.new(math.random()/2,0,math.random()-0.5) db.Parent = physicalenemy	
+			end
+			physicalenemy.Humanoid:TakeDamage(DMG)
+			if physicalenemy.Humanoid.Health <= 0 then profiles.updateprofile(player.UserId, "Fighting", false)
+				if humanoid.Health > 0 then print("Player won!") 
+					humanoid.WalkSpeed = 17
+					humanoid.JumpHeight = 7.2 task.wait(0.5)winsfx:Play() game.Debris:AddItem(physicalenemy, 2) reward(player, enemy)
+				end break end end end) return
+end
+invoke.OnServerInvoke = function(player, field)
+	local profile = profiles.getprofile(player.UserId)
+	local char:Model = player.Character
+	local humanoid = char.Humanoid
+	local area = info.fighting.enemystats[field]
+	local weapon = profile["Currentweapon"] or "Basic Sword"
+	local choice = math.random(1, 100)
+	local enemyres
+	for i,v in ipairs(indexedares[field]) do
+		local rarity = enemstats[field][v] and enemstats[field][v]["rarity"]
+		if not rarity then return end
+		if choice <= rarity then enemyres = v break end
+	end
+	if not enemyres then return end
+	profiles.updateprofile(player.UserId, "Fighting", true)
+	local hasach = profile["Achievsets"]["Fighting"] or {}
+	humanoid.MaxHealth = 15 + ((hasach["easy"] and 5) or 0)
+	humanoid.Health = humanoid.MaxHealth
+	char:PivotTo(CFrame.new(workspace:WaitForChild("PlayerPos").Position)*CFrame.Angles(0, math.rad(-13),0))
+	profiles.updateprofile(player.UserId, "CurrentEnemy", enemyres)
+	print(profiles.getprofile(player.UserId)["CurrentEnemy"])
+	humanoid.Died:Connect(function()
+		profiles.updateprofile(player.UserId, "Fighting", false)
+	end)
+	dodamage(player, info.fighting.weaponstats[weapon], enemyres, field)
+	return
+end
+rep.Update.Abort.OnServerEvent:Connect(function(player)player.Character.Humanoid.Health = 0 end)
+rep.Update.NewWardrobeUpdate.OnServerEvent:Connect(function(player, i)
+	local profile = profiles.getprofile(player.UserId)
+	if not profile["Sword"] or (profile["Sword"] and profile["Sword"] < i) then return end
+	profile["CurrentSword"] = i
+end)
