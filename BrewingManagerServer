@@ -1,0 +1,34 @@
+local rep = game.ReplicatedStorage
+local brewpot,claimpot=Instance.new("RemoteEvent", rep),Instance.new("RemoteEvent", rep)brewpot.Name="BrewPotion"claimpot.Name="ClaimPotion"
+local drinkpot=Instance.new("RemoteEvent", rep) drinkpot.Name = "DrinkPotion"
+local profiler = require(rep.DataStoreModule)
+local brewinginfo = require(rep.GameStatsInfo).brewing
+if not brewinginfo then warn("Don't rename it! Check this script.") end
+brewpot.OnServerEvent:Connect(function(player, potionname:string)
+	local profile = profiler.getprofile(player.UserId)
+	local potioninfo = brewinginfo.potions[potionname]
+	local potionbrewtimer = profile["Potionbrewtimer"]
+	local hasachieve = profile["Achievsets"]["Brewing"] or {}
+	if potionbrewtimer and potionbrewtimer > os.time() then 
+		print("Timer active!", potionbrewtimer - os.time(), "Seconds left") return end -- Measured in Timestamps
+	for resource, cost in potioninfo.cost do 
+		if not profile[resource] or (profile[resource] and profile[resource] < cost) then print("You need more", resource) return end end
+	profile["Potionbrewtimer"] = os.time() + potioninfo.brewtime
+	for resource, cost in potioninfo.cost do local totalcost = cost
+	if hasachieve["easy"] and resource == "Mushrooms" then totalcost -= 5 end profiler.updateprofile(player.UserId, resource, -totalcost) end
+	profile["Currentpotion"] = potionname
+end)
+claimpot.OnServerEvent:Connect(function(player)
+	local profile = profiler.getprofile(player.UserId)
+	local currentpot = profile["Currentpotion"]
+	local potbrewtimer = profile["Potionbrewtimer"]
+	if potbrewtimer and currentpot and potbrewtimer <= os.time() then
+		profiler.additem(player,currentpot,1)
+		local m = require(game.ReplicatedStorage.Mathematics)
+		player.SkillXP.Brewing_XP.Value += m.xpmultcalc(player,brewinginfo.potions[currentpot].xp)
+		m.levelcalc(player,"Brewing",player.SkillXP.Brewing_XP.Value)
+		profiler.progAchieve(player, {Cat = "Brewing", Diff = "easy", Index = 1}, 1)
+		profile["Currentpotion"] = nil
+		profile["Potionbrewtimer"] = nil
+	end
+end)
