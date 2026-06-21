@@ -1,0 +1,32 @@
+local Players = game:GetService("Players")
+local MarketplaceService = game:GetService("MarketplaceService")
+local profiles = require(game.ReplicatedStorage.DataStoreModule)
+-- Map Dev Product IDs to the amount of Donor Coins to award
+local DONOR_COIN_DEVPRODUCTS = {
+	[3336798592] = 1,   -- +1 Donor Coin
+	[3336799804] = 2,   -- +2 Donor Coins
+	[3336804093] = 5,   -- +5 Donor Coins
+	[3336810772] = 20,  -- +20 Donor Coins
+	[3336820031] = 100, -- +100 Donor Coins
+}
+-- This function is called by Roblox when a Dev Product is purchased
+MarketplaceService.ProcessReceipt = function(receiptInfo)
+	local player = Players:GetPlayerByUserId(receiptInfo.PlayerId)
+	if not player then
+		-- Player not found, try again later
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	local amount = DONOR_COIN_DEVPRODUCTS[receiptInfo.ProductId]
+	local type = type(amount)
+	if amount and type == "number" then
+		local donorCoins = player.leaderstats:FindFirstChild("Donor Coins")
+		profiles.additem(player, "Donor Coins", amount)
+		return Enum.ProductPurchaseDecision.PurchaseGranted
+	elseif type == "boolean" then
+		player.stats.Has2xStone.Value = true return Enum.ProductPurchaseDecision.PurchaseGranted
+	else
+		-- Unknown product, do not grant
+		warn("Unknown Dev Product ID: " .. tostring(receiptInfo.ProductId))
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+end
