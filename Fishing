@@ -1,0 +1,93 @@
+local f = require(game.ReplicatedStorage.Modules.Commonfuncs).GetMods()
+workspace:WaitForChild("Bench")
+for _, bench in game.CollectionService:GetTagged("FishBench") do
+local seat = bench:WaitForChild("Seat")
+local storage = game.ServerStorage
+local rodCosmetic = bench:WaitForChild("FishingRod")
+local seated
+local rod, hook, att, op, iscast, ready, hascaught, timeCasted
+local function getFish(timeC, player)
+	timeC = math.max(timeC, 1)
+	local fishcount = 0
+	local profile = f.Profiles.getprofile(player.UserId)
+	local rod = profile["Fishing Rod"] or 0
+	local luckMulti = f.Info.fishing.rods[f.Info.upgradeorders["Fishing Rod"][rod].name].luck
+	local luckFactor = timeC^0.2 * luckMulti
+	if profile["Achievsets"]["Fishing"] and profile["Achievsets"]["Fishing"]["easy"] then luckFactor *= 1.25 end
+	local luckNumber = math.floor((1 - 1/luckFactor) * 100)
+	local random = math.random(luckNumber, 100)
+	local chosenFish
+	for _, fish in f.Info.fishing.fishorder do
+		local info = f.Info.fishing.fish[fish]
+		fishcount += info.chance
+		if random <= fishcount then
+			chosenFish = fish break
+		end
+	end
+	print("You caught a..", chosenFish)
+	if chosenFish == "Salmon" then f.Profiles.progAchieve(player, {Cat = "Fishing", Diff = "easy", Index = 1}, 1) end
+	f.Profiles.progAchieve(player, {Cat = "Fishing", Diff = "easy", Index = 3}, 1)
+	if timeC < 6 then f.Profiles.awardAchievement(player, {Skill = "Fishing", Diff = "easy", Index = 2}) end
+	return chosenFish
+end
+game:GetService("RunService").Heartbeat:Connect(function()
+	if iscast and hascaught then
+		hook.Position = op + Vector3.new(math.random() * .6, math.random() * .6, math.random() * .6)
+	end
+end)
+seat:GetPropertyChangedSignal("Occupant"):Connect(function()
+	local occupant = seat.Occupant
+	if not occupant then rodCosmetic.Transparency = 0 rodCosmetic.CanCollide = true
+	local char = seated.Character
+	if char then
+	char:WaitForChild("Fishing Rod"):Destroy() end
+		seated = nil return end
+	local player = game.Players:GetPlayerFromCharacter(occupant.Parent)
+	if player then rodCosmetic.Transparency = 1 rodCosmetic.CanCollide = false
+		seated = player
+		rod = script:WaitForChild("Fishing Rod"):Clone()
+		occupant:EquipTool(rod)
+		rod.Unequipped:Connect(function()
+			if rod.Parent then
+			occupant:EquipTool(rod) end
+		end)
+		hook, att = rod.Hook, rod.Handle.Attachment
+		op = hook.Position
+		iscast = true
+		ready = false
+		task.wait(1)
+		local reel = game.TweenService:Create(hook, TweenInfo.new(1.3), {Position = att.WorldPosition})
+		local cast = game.TweenService:Create(hook, TweenInfo.new(1.3), {Position = op})
+	    timeCasted = os.time()
+		rod.Activated:Connect(function()
+			if ready then
+			cast:Play()
+			ready = false
+			timeCasted = os.time()
+			task.wait(1.5)
+			iscast = true
+			elseif iscast and hascaught then print("Reeling...") iscast = false
+			hascaught = false
+			reel:Play()
+			local fish = getFish(os.time() - timeCasted, player)
+			local catch = storage.Fish:FindFirstChild(fish):Clone()
+			catch.Parent = workspace
+			catch.Position = hook.Position
+			hook.FishConstraint.Attachment1 = catch.Attachment
+			task.wait(1.5)
+			catch:Destroy()
+			f.Profiles.additem(player, fish, 1)
+			f.Profiles.giveXP(player, "Fishing", f.Info.fishing.fish[fish].fishxp)
+			ready = true
+			end
+		end)
+		while task.wait(1) do
+			if not rod or (rod and not rod.Parent) then break end
+			if iscast then
+			local timeC = math.max(os.time() - timeCasted, 1)
+			local chance = (1 - timeC^-0.5) * 20 * f.Info.fishing.rods[f.Info.upgradeorders["Fishing Rod"][f.Profiles.getprofile(player.UserId)["Fishing Rod"] or 0].name].baitmult
+			local random = math.random(0, 100)
+			if random <= chance then hascaught = true end end
+		end
+	end
+end) end
