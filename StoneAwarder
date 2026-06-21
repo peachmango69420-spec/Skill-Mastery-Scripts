@@ -1,0 +1,55 @@
+local rep = game:GetService("ReplicatedStorage")
+local pickinf = require(rep.GameStatsInfo).mining.pickinfo
+local gain = rep.Gain
+local module = require(rep.Mathematics)
+local profiles = require(rep.DataStoreModule)
+local achieves = {
+	{Ore = "Copper", Diff = "easy", Num = 50, I = 3},
+	{Ore = "Iron", Diff = "medium", Num = 125, I = 2},
+}
+local xps = {Copper = 2, Iron = 4, Silver = 8, Gold = 20}
+gain.OnServerEvent:Connect(function(player)
+	local profile = profiles.getprofile(player.UserId)
+	local badges = profile["Badges"]
+	local picklevelbonuses = {}
+	if profile and profile["pick"] then picklevelbonuses = pickinf["pick"..profile["pick"]] end
+	local percent25 = player.stats:FindFirstChild("1.25x Stone")
+	local xp = player.SkillXP.Mining_XP
+	local stone = player.leaderstats.Stone
+	local doubler = player.stats.Has2xStone
+	local mult = 1
+	local xpmult = 1
+	local hasachiev = profile["Achievsets"]["Mining"] or {}
+	if picklevelbonuses.orechances then
+	for ore,val in pairs(picklevelbonuses.orechances) do 
+		local orechance = val
+		if hasachiev["medium"] then orechance *= 1.5 end
+		local chance = math.random(1, (100/val))
+		if chance <= 100 then 
+			xpmult += (xps[ore] or 0)
+			profiles.additem(player, ore, 1)
+			profile["Achievprogs"]["Total"..ore] = (profile["Achievprogs"]["Total"..ore] or 0) + 1
+		end
+	end	
+	end
+	if doubler.Value == true then mult *=2 end
+	if hasachiev["easy"] then mult *= 1.3 end
+	if percent25 and percent25.Value > 0 then mult *= 1.25 end
+	stone.Value += mult
+	profile["Stone"] = stone.Value
+	profiles.giveXP(player, "Mining", (picklevelbonuses.xpbonus * xpmult))
+	--Award Badge
+	if stone.Value >= 100 and not badges[2031796154467765] then
+		profiles.updateprofile(player.UserId, "Badges", true, 2031796154467765)
+		if not game.BadgeService:UserHasBadgeAsync(player.UserId, 2031796154467765) then
+			game.BadgeService:AwardBadgeAsync(player.UserId, 2031796154467765) 
+			profiles.updateprofile(player.UserId, "Badges", true, 2031796154467765)
+			print("Player got badge!")
+		end end
+	profile["Clicks"] = profile["Clicks"] or 0
+	profile["Clicks"] += 1
+	if profile["Clicks"] >= 250 then profiles.awardAchievement(player, {Skill = "Mining", diff = "easy", Index = 1}) end
+	if profile["Clicks"] >= 2500 then profiles.awardAchievement(player, {Skill = "Mining", diff = "medium", Index = 1}) end
+	for _, info in achieves do local total = profile["Achievprogs"]["Total"..info["Ore"]]
+		if total and total >= info["Num"] then
+			profiles.awardAchievement(player, {Skill = "Mining", Diff = info["Diff"], Index = info["I"]}) end end end)
