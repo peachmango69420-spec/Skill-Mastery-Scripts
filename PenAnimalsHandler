@@ -1,0 +1,357 @@
+local player = game.Players.LocalPlayer
+local rep = game.ReplicatedStorage
+local f = require(rep.Modules.Commonfuncs)
+local char = player.Character or player.CharacterAdded:Wait() and player.Character
+local humanoid:Humanoid = char:WaitForChild("Humanoid")
+local origCheck = true
+local Params = {AgentCanJump = true, AgentCanClimb = true}
+local path = game.PathfindingService:CreatePath(Params)
+local timeToMove = 1.2
+local frame = script.Parent
+local gui = frame.Parent
+local penframe = gui:WaitForChild("PenInfo")
+local foodframe = gui:WaitForChild("FoodFrame")
+local tweens = f.GetTweens(frame)
+local pentweens = f.GetTweens(penframe)
+local foodtweens = f.GetTweens(foodframe)
+local farminfo = f.GetMods().Info.farming
+local pen = workspace:WaitForChild("Animal Pen")
+local mouse = player:GetMouse()
+local ogicon = mouse.Icon
+local cam = workspace.CurrentCamera
+local connection
+local isgrooming = false
+local function Groom(animal, index, includeTimer)
+	if isgrooming then return end isgrooming = true
+	local animaltype = animal.Parent.Name
+	gui.GroomPercent.Visible = true
+	gui.GroomLabel.Visible = true
+	gui.TimeLabel.Visible = true
+	animal:SetAttribute("Busy", true)
+	for _, ui in script.Parent.Parent.Parent.Parent:GetChildren() do
+		if ui:IsA("ScreenGui") and ui ~= gui then
+			ui.Enabled = false end
+	local frame = pen:WaitForChild(animaltype):WaitForChild("Groom").PrimaryPart.CFrame * CFrame.new(0, 1, 0)
+	local prompt = pen:WaitForChild(animaltype):WaitForChild("Area"):WaitForChild("ProxPart"):WaitForChild("Prompt")
+	prompt.Enabled = false
+	animal:PivotTo(frame)
+	local zoomframe = animal:GetPivot() * CFrame.new(0, 1, -6) * CFrame.Angles(math.rad(0), math.rad(180), math.rad(0))
+	char:PivotTo(zoomframe * CFrame.new(0, 0, 2))
+	cam.CameraType = Enum.CameraType.Scriptable
+	cam.CFrame = zoomframe humanoid.WalkSpeed = 0 humanoid.JumpHeight = 7.2
+	mouse.Icon = "rbxassetid://10475718997"
+	local timelabel = gui.TimeLabel
+	local isdone = false
+	if includeTimer then
+		timelabel.Visible = true
+		task.spawn(function()
+			local timer = 0
+			while task.wait(.1) do
+					gui.TimeLabel.Text = string.format("%.1f", timer) .."s"
+					timer += .1 if isdone then break end end end)
+	else timelabel.Visible = false end
+	local debounce = os.clock()
+	local groomp = 0
+	connection = mouse.Move:Connect(function()
+		if mouse.Target == animal then
+			if groomp >= 100 then
+			groomp = 0
+			connection:Disconnect() isdone = true
+			gui.GroomPercent.Visible = false
+			gui.GroomLabel.Visible = false
+			gui.TimeLabel.Visible = false
+			rep.Farming.GroomAnimal:FireServer(animaltype, index, false) print("Fireserver..")
+			cam.CameraType = Enum.CameraType.Custom
+			humanoid.WalkSpeed = 16
+			humanoid.JumpHeight = 7.2
+			animal:SetAttribute("Busy", false)
+			mouse.Icon = ogicon
+			prompt.Enabled = true
+			isgrooming = false
+			elseif isgrooming then
+			groomp += 0.5
+			local diff = os.clock() - debounce
+			if diff >= 0.4 then debounce = os.clock() game.SoundService.Brush:Play() end
+			gui.GroomPercent.Bar.Size = UDim2.fromScale(groomp/100, 1)
+			gui.GroomPercent.Label.Text = math.floor(groomp).."%"
+			end
+		end
+	end)
+	end
+end
+penframe.XButton.MouseButton1Click:Connect(function()
+	pentweens[3]:Play() pentweens[4]:Play() task.wait(.6) penframe.Visible = false
+end)
+local lastBirth = 1700000000
+local function getTimeStamp(number)
+	if number < 60 then return number.."s"
+	elseif number < 3600 then return number//60 .."m "..(number%60).."s"
+	elseif number < 86400 then return number//3600 .."h "..(number%3600)//60 .. "m ".. number%60 .. "s"
+	elseif number >= 86400 then return number//86400 .."d "..(number%86400)//3600 .."h ".. (number%3600)//60 .."m "..number%60 .."s" end
+end
+task.spawn(function()
+while task.wait(1) do
+	frame:WaitForChild("AgeLabel").Text = "Age: "..getTimeStamp(os.time() - lastBirth)
+end end)
+local kilani, foodani, kili, kb, foodtype 
+frame.Groom.MouseButton1Click:Connect(function()
+	tweens[3]:Play() tweens[4]:Play() task.wait(.6) frame.Visible = false
+	Groom(workspace.Animals:FindFirstChild(kilani):QueryDescendants("."..kb)[1], kili, false)
+end)
+penframe.ActionButton.MouseButton1Click:Connect(function()
+	rep.Farming.AnimalAction:FireServer(foodani)
+	game.SoundService.Tick:Play()
+end)
+foodframe.XButton.MouseButton1Click:Connect(function()
+	foodtweens[3]:Play() foodtweens[4]:Play() task.wait(.6) foodframe.Visible = false
+end)
+local function getTotalFood(animalname)
+	local profile = f.SafeGet()
+	local total = 0
+	for _, info in (profile["Animals"][animalname] or {}) do
+	if not info["Dead"] then
+		local food = farminfo.Animals[animalname].Eat
+		if info["Defects"] and info["Defects"]["Glutton"] then
+			total += food
+		end total += food
+	end
+	end
+	return total
+end
+foodframe.Min.MouseButton1Click:Connect(function()
+	local profile = f.SafeGet()
+	local food = (profile["AnimalFood"] or {})[foodani]
+	local foodinfo = farminfo.Animals[foodani]
+	local remaining
+	if foodinfo then
+	local amount = farminfo.Food[foodinfo.Foodtype][foodtype]
+	remaining = amount and math.max(0,math.ceil((getTotalFood(foodani))/amount) - food) or 0 else remaining = 0 end
+	foodframe.Amount.Text = remaining
+end)
+foodframe.Max.MouseButton1Click:Connect(function()
+	local profile = f.SafeGet()
+	foodframe.Amount.Text = profile[foodtype] or 0
+end)
+foodframe.FeedButton.MouseButton1Click:Connect(function()
+	local profile = f.SafeGet()
+	local food = (profile["AnimalFood"] or {})[foodani]
+	local amount = profile[foodtype] or 0
+	local foodamt = tonumber(foodframe.Amount.Text)
+	if not foodani or not foodtype then f.errorButton(foodframe.FeedButton, "Select a food type!") return end
+	if not foodamt then f.errorButton(foodframe.FeedButton, "Enter a number!") return end
+	if (foodamt <= 0) or (math.floor(foodamt) ~= foodamt) then f.errorButton(foodframe.FeedButton, "Enter a valid number!") return end
+	if amount < foodamt then f.errorButton(foodframe.FeedButton, "You don't have enough!") return end
+	rep.Farming.AddFood:FireServer(foodani, foodtype, foodamt)
+	local foodbutton = foodframe.Food:FindFirstChild("Food"..foodtype)
+	if foodbutton then foodbutton.Amount.Text = tostring(tonumber(foodbutton.Amount.Text) - foodamt) end
+	f.errorButton(foodframe.FeedButton, "Added " .. (foodamt * farminfo.Food[farminfo.Animals[foodani].Foodtype][foodtype]), game.SoundService.Buy, Color3.new(0,1,0))
+end)
+penframe.FeedButton.MouseButton1Click:Connect(function()
+	pentweens[3]:Play() pentweens[4]:Play() task.wait(.6) penframe.Visible = false
+	foodtweens[1]:Play() foodtweens[2]:Play() foodframe.Visible = true
+	f.SafeClear(foodframe.Food)
+	local profile = f.SafeGet()
+	for food, amount in farminfo.Food[farminfo.Animals[foodani].Foodtype] do
+		local button = f.createimagelabel(foodframe.Food, food, profile[food] or 0, {Square = true, Name = food, Stats = "+"..amount.." Food each"}, player)
+		button.Name = "Food"..food
+		button.Image.MouseButton1Click:Connect(function()
+			foodtype = food
+			for _, image in foodframe.Food:GetChildren() do
+if image == button then image.UIGradient1.Enabled = false image.UIGradient2.Enabled = true elseif image:IsA("Frame") then image.UIGradient1.Enabled = true image.UIGradient2.Enabled = false end
+			end
+		end)
+	end
+end)
+frame:WaitForChild("Kill").MouseButton1Click:Connect(function()
+	if kili and kilani then
+	rep.Farming.KillAnimal:FireServer(kilani, kili) game.SoundService.Sword:Play() workspace.Animals:FindFirstChild(kilani):QueryDescendants("."..kb)[1]:Destroy()
+	tweens[3]:Play() tweens[4]:Play() task.wait(.67) frame.Visible = false kili, kilani = nil,nil end
+end)
+local function followPath(destination, character)
+	local humanoid = character:WaitForChild("Humanoid")
+	local success, errorMessage = pcall(function()
+		return path:ComputeAsync(character.Position, destination)
+	end)
+	local waypoints
+	local nextWaypointIndex
+	local reachedConnection
+	local blockedConnection
+	if success and path.Status == Enum.PathStatus.Success then
+		waypoints = path:GetWaypoints()
+		blockedConnection = path.Blocked:Connect(function(blockedWaypointIndex)
+			if blockedWaypointIndex >= nextWaypointIndex then
+				blockedConnection:Disconnect()
+				followPath(destination, character)
+			end
+		end)
+		if not reachedConnection then
+			reachedConnection = humanoid.MoveToFinished:Connect(function(reached)
+				if reached and nextWaypointIndex < #waypoints then
+					-- Increase waypoint index and move to next waypoint
+					nextWaypointIndex += 1
+					humanoid:MoveTo(waypoints[nextWaypointIndex].Position)
+				else
+					reachedConnection:Disconnect()
+					blockedConnection:Disconnect()
+				end
+			end)
+		end
+		nextWaypointIndex = 2
+		local nwp = waypoints[nextWaypointIndex]
+		if not nwp then return end
+		local pos = Vector3.new(nwp.Position.X, 7, nwp.Position.Z)
+		game.TweenService:Create(character, TweenInfo.new(1.2/(#waypoints)), {Position = pos}):Play()
+		--humanoid:MoveTo(pos)
+	else
+		warn("Path not computed!", errorMessage,path)
+	end
+end
+local function openInfo(animalinfo, animalname, i)
+	game.SoundService.Tick:Play()
+	tweens[1]:Play() tweens[2]:Play() frame.Visible = true
+	lastBirth = animalinfo.Birth
+	frame.AgeLabel.Text = "Age: "..getTimeStamp(os.time() - lastBirth)
+	frame.NameLabel.Text = "Name: " .. animalinfo.Name
+	frame.NameLabel.GenderIcon.Image = f.GetMods().Design.geticon(animalinfo.Gender)
+	local statustype = (animalinfo["Dead"] and "Dead") or ((not animalinfo.Defects[1] and not animalinfo.Hungry) and "Good") or animalinfo.Hungry and "Hungry"
+	if statustype == "Good" then
+		frame.StatusLabel.Text = "Status: <font color='rgb(0,255,0)'>Healthy</font>"
+	elseif statustype == "Hungry" then
+		frame.StatusLabel.Text = "Status: <font color='rgb(255,255,0)'>Hungry</font>"
+	elseif statustype == "Dead" then
+		frame.StatusLabel.Text = "Status: <font color='rgb(255,0,0)'>Dead</font>"
+	end
+	frame.LevelLabel.Text = "Level ".. animalinfo.Level
+	local levels = f.GetMods().Math.levelcalc(player, "Farming", animalinfo.XP or 0)
+	local p = levels[3]/levels[2]
+	frame.XPBarBackground.XPBar.Size = UDim2.fromScale(0,1)
+	game.TweenService:Create(frame.XPBarBackground.XPBar, TweenInfo.new(0.7), {Size = UDim2.fromScale(p,1)}):Play()
+	frame.XPBarBackground.Label.Text = levels[3] .."/"..levels[2]
+	kilani, kili, kb = animalname, i, animalinfo.Birth
+	local killxp = farminfo.Animals[animalname].KillXP
+	local totalxp = (levels[1] * (levels[1] + 1))/2 * killxp
+	frame.Kill.Text = "KILL (+".. f.NumberCommas(totalxp) .." Farming XP)"
+	if not animalinfo["IsGroomed"] then local age = (os.time() - animalinfo.Birth)//86400
+		local groomxp = 5 * math.ceil(age / 10)
+		frame.Groom.Text = "Groom (+".. f.NumberCommas(groomxp).." Animal XP)"
+	else frame.Groom.Text = "Groom" end
+	frame.Groom.Visible = (statustype ~= "Dead")
+end
+local function seePen(animalname)
+	foodani = animalname
+	f.SafeClear(penframe.Animals)
+	local profile = f.SafeGet()
+	local haspen = not not profile["Animals"][animalname]
+	if haspen then
+	local animals = profile["Animals"][animalname]
+	local food = (profile["AnimalFood"] or {})[animalname] or 0
+	local info = farminfo.Animals[animalname]
+	local eat = getTotalFood(animalname)
+	penframe.FeedButton.Text = "Feed (".. food .. "/" .. eat .. ")"
+	if food >= eat then
+		penframe.FeedButton.BackgroundColor3 = Color3.new(0, 1, 0)
+	else penframe.FeedButton.BackgroundColor3 = Color3.new(1,0,0)
+	end
+	if info["Action"] then
+		penframe.ActionButton.Visible = true
+		penframe.ActionButton.Text = info.ActionName
+	else penframe.ActionButton.Visible = false end
+	penframe.Capacity.Text = "Capacity ".. #animals .. "/".. f.GetMods().Info.market.farm.animals[animalname].max
+	local temp = script:WaitForChild("Temp")
+	for i, animalinfo in animals do
+		local tempclone = temp:Clone()
+		tempclone.ImageLabel.Image = f.GetMods().Design.geticon(animalname)
+		tempclone.TimeLabel.Text = string.split(getTimeStamp(os.time() - animalinfo.Birth), " ")[1]
+		tempclone.NameLabel.Text = animalinfo.Name
+		tempclone.NameLabel.GenderIcon.Image = f.GetMods().Design.geticon(animalinfo.Gender)
+		penframe.AnimalActionLabel.Text = farminfo.Animals[animalname].ActionDescription
+		if animalinfo['Dead'] then tempclone.TimeLabel.TextColor3 = Color3.new(1,0,0) end
+		tempclone.OpenInfo.MouseButton1Click:Connect(function()
+			pentweens[3]:Play() pentweens[4]:Play()
+			local animalinfo = f.SafeGet()["Animals"][animalname][i]
+			openInfo(animalinfo, animalname, i)
+			task.wait(.6)
+			penframe.Visible = false
+		end)
+		tempclone.Parent = penframe.Animals
+	end
+	pentweens[1]:Play() pentweens[2]:Play() penframe.Visible = true
+	else
+		local temp = rep.UiStuff.Notif
+		local notif = temp:Clone() local sound = game.SoundService.Error2 notif.Text = "Pen is locked!"
+	    notif.TextColor3 = Color3.new(1, 0, 0) 
+		notif.Parent = script.Parent.Parent
+		game.TweenService:Create(notif, TweenInfo.new(1.1), {Position = notif.Position - UDim2.fromScale(0, 0.3)}):Play()
+		game.Debris:AddItem(notif, 1.1) sound:Play()
+		task.wait(0.7)
+		game.TweenService:Create(notif, TweenInfo.new(0.4), {TextTransparency = 1}):Play()
+	end
+end
+for animalname, info in farminfo.Animals do
+	local area = pen:FindFirstChild(animalname)
+	if area then
+	local prompt:ProximityPrompt = area:WaitForChild("Area"):WaitForChild("ProxPart"):WaitForChild("Prompt")
+	prompt.Triggered:Connect(function(plr)
+		if plr ~= player or penframe.Visible == true then return end
+		seePen(animalname) 
+	end) end end
+while task.wait(3) do
+	local profile = f.SafeGet() 
+	local animals = profile["Animals"] or {}
+	for animalname, animalist in animals do
+		local folder = workspace.Animals:FindFirstChild(animalname) or Instance.new("Folder", workspace.Animals) 
+		folder.Name = animalname
+		local animalarea = pen:FindFirstChild(animalname)
+		local area, moves
+		if animalarea then area = animalarea.Area moves = animalarea.Moves:GetChildren() end
+		local prompt:ProximityPrompt = area.ProxPart.Prompt
+		for i, animalinfo in animalist do
+			local isdead = not not animalinfo["Dead"]
+			local animal:MeshPart = folder:QueryDescendants("."..animalinfo.Birth)[1]
+			local randompart = moves[math.random(1, #moves)] 
+			if not animal then animal = rep.Farming:FindFirstChild(animalname):Clone()
+				animal.Parent = folder
+				animal.Name = animalinfo.Name
+				animal:AddTag(animalinfo.Birth)
+				animal:PivotTo(area.SpawnArea:GetPivot()) if isdead then animal.CFrame = animal.CFrame * CFrame.Angles(0, 0, math.rad(-90)) end
+				local billboard:BillboardGui = animal.BillboardGui 
+				local bill = billboard.Content
+				animal.ViewInfo.MouseHoverEnter:Connect(function()
+					billboard.Enabled = true
+				end)
+				animal.ViewInfo.MouseHoverLeave:Connect(function()
+					billboard.Enabled = false
+				end) 
+				animal.ViewInfo.MouseClick:Connect(function()
+					local animalinfo = f.SafeGet()["Animals"][animalname][i]
+					if not isgrooming then openInfo(animalinfo, animalname, i) end
+				end)
+				frame.XButton.MouseButton1Click:Connect(function()
+					tweens[3]:Play() tweens[4]:Play() task.wait(.6) frame.Visible = false
+				end)
+				bill:WaitForChild("NameLabel").Text = animal.Name
+				bill.GenderIcon.Image = f.GetMods().Design.geticon(animalinfo.Gender)
+				local tlabel = bill:WaitForChild("TimeLabel")
+				if isdead then tlabel.Text = "Dead at "..((os.time() or animalinfo["DiedAt"]) - animalinfo.Birth)//86400 .." days" tlabel.TextColor3 = Color3.fromRGB(255, 0, 0) else
+				task.spawn(function()
+					while task.wait(1) do
+						if bill and tlabel then
+						local lifetime = os.time() - animalinfo.Birth
+						if lifetime < 60 then
+							tlabel.Text = lifetime.."s"
+						elseif lifetime < 3600 then
+							tlabel.Text = (lifetime // 60).."m ".. (lifetime%60) .. "s"
+						elseif lifetime < 86400 then
+							tlabel.Text = (lifetime//3600) .. "h " .. (lifetime%3600)//60 .. "m " .. (lifetime%60) .. "s"
+						elseif lifetime < 604800 then
+							tlabel.Text = (lifetime//86400) .. "d " .. (lifetime%86400)//3600 .. "h " .. (lifetime%3600)//60 .. "m"
+						else tlabel.Text = (lifetime//86400) .. "d " .. (lifetime%86400)//3600 .. "h"
+						end end
+					end
+				end) end
+			end
+			animal.Humanoid.DisplayName = animalinfo.Name local isbusy = animal:GetAttribute("Busy")
+			if not isdead and not isbusy then local part = pen:FindFirstChild(animalname):FindFirstChild("Moves"):GetChildren()[math.random(1,26)] print(animal, part.Parent.Parent.Name) followPath(part.Position, animal) end
+			end
+		end
+end
