@@ -1,0 +1,124 @@
+local rep = game.ReplicatedStorage
+local m = require(rep.Modules.Commonfuncs):GetMods()
+local MPS = game:GetService("MarketplaceService")
+local music = Instance.new("Sound")
+music.Archivable = true
+local frame = script.Parent
+local songframe = frame.SongFrame
+local csframe = frame.CurrentSongFrame
+local lastsong = nil
+local songindex = 1
+function Shuffle(t)
+	for i = #t, 2, -1 do
+		local j = math.random(1, i)
+		t[i], t[j] = t[j], t[i]
+	end
+	return t
+end
+------------------------------------[[PLAYLIST]------------------------------------------------------------------------------------
+local songs = {
+	{id = "9043887091", songname = "Lo-fi Chill A"},
+	{id = "1845341094", songname = "Chill Jazz"},
+	{id = "9044565954", songname = "Smooth Vibes (c)"},
+	{id = "9046862941", songname = "Sunset Chill (Bed Version)"},
+	{id = "9046863579", songname = "City Lights"},
+	{id = "9046864489", songname = "Violet Clouds"},
+	{id = "1839363112", songname = "Chilled Relaxation"},
+	{id = "1840901237", songname = "Footprints In The Sand"},
+	{id = "1847417433", songname = "Unravel A"},
+	{id = "1847245265", songname = "Dangerous Drive A"},
+	{id = "1840712882", songname = "Nitrovision"},
+	{id = "1847358730", songname = "Fluffy Vibes A"},
+}
+local prof = game.ReplicatedStorage.Update.RequestProfile:InvokeServer()
+local Playlist = (prof or {})["Playlist"]
+songs = Shuffle(Playlist or songs)
+local function createButton(i, info)
+	local clone = songframe.SongNameTemp:Clone()
+	if i == 1 then clone.BackgroundColor3 = Color3.new(1, 1, 0) end
+	clone.Text=info.songname.." - "..'<stroke color = "#000000"  thickness = "0.5"><i> <font color = "#ffaa00">'..info.id..'</font> </i></stroke>'
+	clone.Name = info.id
+	clone.Parent = songframe
+	clone.Visible = true
+	clone:AddTag("Musicer")
+	clone.MouseButton1Click:Connect(function()
+		local song = songs[songindex].songname
+		if song == info.songname then return end
+		local curframe = songframe:FindFirstChild(songs[songindex].id)
+		curframe.BackgroundColor3 = Color3.new(1, 1, 1)
+		clone.BackgroundColor3 = Color3.new(1, 1, 0)
+		songindex = i
+		music.SoundId = "rbxassetid://"..songs[i].id
+		music:Play()
+		music.TimePosition = 0
+		csframe.SongName.Text = info.songname
+	end)
+end
+local function createSongs()
+	for _, button in game.CollectionService:GetTagged("Musicer") do
+		button:Destroy()
+	end
+for i, si in ipairs(songs) do
+createButton(i, si)	end
+end createSongs()
+music.Parent = script.Parent
+music.PlaybackSpeed = 1 
+music.Volume = 0.12
+music.Looped = true
+music:Play()
+music.Name = "BackgroundSoundtrack"
+csframe.PauseButton.MouseButton1Click:Connect(function()
+	if music.IsPaused then music:Resume() csframe.PauseButton.Image = "rbxassetid://14219414360" 
+	else music:Pause() csframe.PauseButton.Image = "rbxassetid://12099513379"
+	end
+end)
+csframe.SkipButton.MouseButton1Click:Connect(function()
+	music.TimePosition = music.TimeLength
+	songframe:FindFirstChild(songs[songindex].id).BackgroundColor3 = Color3.new(1,1,1)
+end)
+csframe.ShuffleButton.MouseButton1Click:Connect(function()
+	songs = Shuffle(songs)
+	songindex = 1
+	createSongs()
+	music.SoundId = "rbxassetid://"..songs[1].id
+	music.TimePosition = 1
+	csframe.SongName.Text = songs[1].songname
+end)
+-------------------[[SONGS PLAYER]]---------------------------------------------------------------------------
+local tb = frame.MusicInsert
+frame.AddButton.MouseButton1Click:Connect(function() -- Function to add custom songs
+	local id = tb.Text
+	if not tonumber(tb.Text) then m.Funcs.errorButton(tb, "Insert a valid Asset Id!") return end
+	local res, name = rep.AddCustomSong:InvokeServer(id)
+	if not res then m.Funcs.errorButton(tb, name) return end
+	local clone = songframe.SongNameTemp:Clone()
+	clone.Text = name.." - "..'<stroke color = "#000000"  thickness = "0.5"><i> <font color = "#ffaa00">'..id..'</font> </i></stroke>'
+	clone.Name = id
+	clone.Parent = songframe
+	clone.Visible = true
+	table.insert(songs, {id = id, songname = name})
+	game.SoundService.Womp:Play()
+end)
+task.spawn(function() if not music.IsLoaded then music.Loaded:Wait() end
+	while task.wait(0.5) do local formattedtime = m.Math.timeconcatenation(math.floor(music.TimeLength))
+	csframe.Time.Text = m.Math.timeconcatenation(math.floor(music.TimePosition)).."/"..formattedtime
+	csframe.SongPercentage.Bar.Size = UDim2.new(music.TimePosition/music.TimeLength, 0, 1, 0) end end)
+while true do
+	if songindex > #songs then
+		songindex = 1
+		music.SoundId = "rbxassetid://"..songs[1].id
+		music.TimePosition = 1
+		csframe.SongName.Text = songs[1].songname
+	end
+	local songinfo = songs[songindex]
+	local currentsongbutton = songframe:FindFirstChild(songinfo.id)
+	music.SoundId = "rbxassetid://"..songinfo.id
+	if not music.IsLoaded then 
+		music.Loaded:Wait() end
+	lastsong = songinfo.id
+	csframe.SongName.Text = songinfo.songname
+	currentsongbutton.BackgroundColor3 = Color3.new(1, 1, 0)
+	music.DidLoop:Wait()
+	songindex += 1
+	currentsongbutton.BackgroundColor3 = Color3.new(1, 1, 1)
+end
