@@ -1,7 +1,7 @@
 local socialservice = game:GetService("SocialService")
 local HttpService = game:GetService("HttpService")
 local WORKER_URL = "https://roblox-notifications.gabrieljacobovits123.workers.dev"
-local INTERNAL_KEY = "s3cure-notify-ix9z7a" 
+local INTERNAL_KEY -- not showing in this github repo :)
 local poissoncalc = require(game.ReplicatedStorage.Modules.PoissonMath)
 local mods = require(game.ReplicatedStorage.Modules.Commonfuncs).GetMods()
 local offlinerewardsev = game.ReplicatedStorage.Update.OfflineRewards
