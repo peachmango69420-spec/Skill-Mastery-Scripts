@@ -1,4 +1,5 @@
 All these are links to youtube videos demonstrating the scripts
+Note: The links after "Demonstrated in" link to the scripts of the links on the right.
 
 https://youtu.be/iEIU5rGjFKw - Demonstrated in [PenAnimalsHandler](../StarterGuiScripts/PenAnimalsHandler)
 
